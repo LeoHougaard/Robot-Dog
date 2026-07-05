@@ -1,0 +1,2581 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot Dog Control</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7f8;
+      --panel: #ffffff;
+      --panel-2: #edf3f1;
+      --text: #1b2328;
+      --muted: #64727a;
+      --line: #d7e0e0;
+      --accent: #0b7f79;
+      --accent-2: #d24f35;
+      --good: #2f8c54;
+      --warn: #b7791f;
+      --shadow: 0 10px 30px rgba(27, 35, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button, input, select {
+      font: inherit;
+      min-width: 0;
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 12px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    button.danger {
+      background: var(--accent-2);
+      border-color: var(--accent-2);
+      color: white;
+    }
+
+    button.icon {
+      width: 38px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 9px;
+      background: white;
+      color: var(--text);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    select {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 9px;
+      background: white;
+      color: var(--text);
+    }
+
+    .shell {
+      min-height: 100vh;
+    }
+
+    main {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 20px;
+      line-height: 1.1;
+    }
+
+    h2 {
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    h3 {
+      font-size: 14px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .status-row, .toolbar, .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warn);
+    }
+
+    .dot.connected {
+      background: var(--good);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+      min-width: 0;
+    }
+
+    .top-panel {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .top-actions {
+      justify-content: flex-end;
+    }
+
+    .connection-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) auto auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .add-servo-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    details.panel summary {
+      cursor: pointer;
+      font-weight: 700;
+      list-style-position: inside;
+    }
+
+    details.panel[open] summary {
+      margin-bottom: 12px;
+    }
+
+    .empty-state {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      background: #fbfdfd;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .servo-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+      background: #fbfdfd;
+    }
+
+    .servo-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .servo-angle {
+      min-width: 62px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+
+    .servo-readout {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .readout-box {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px;
+      background: white;
+      min-width: 0;
+    }
+
+    .readout-box span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .readout-box strong {
+      display: block;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+      font-size: 14px;
+    }
+
+    .monitor-log {
+      min-height: 74px;
+      max-height: 112px;
+      overflow: auto;
+      border-radius: 7px;
+      padding: 8px;
+      background: #111719;
+      color: #d8eeee;
+      font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .leg-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 1fr) minmax(0, 420px);
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+
+    .leg-visual {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .leg-svg {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfd;
+      overflow: hidden;
+    }
+
+    .leg-axis {
+      stroke: #d9e5e2;
+      stroke-width: 1;
+    }
+
+    .leg-reach {
+      fill: none;
+      stroke: #c8d5d2;
+      stroke-width: 1;
+      stroke-dasharray: 5 5;
+    }
+
+    .leg-link {
+      fill: none;
+      stroke: var(--accent);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 5;
+    }
+
+    .leg-target-line {
+      stroke: var(--accent-2);
+      stroke-width: 1.5;
+      stroke-dasharray: 4 4;
+    }
+
+    .leg-joint {
+      fill: white;
+      stroke: var(--accent);
+      stroke-width: 3;
+    }
+
+    .leg-foot {
+      fill: var(--accent-2);
+      stroke: white;
+      stroke-width: 2;
+    }
+
+    .leg-controls {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .leg-field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .leg-readout {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .leg-limits {
+      display: grid;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: white;
+    }
+
+    .leg-limit-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .leg-limit-picker {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(84px, 112px);
+      gap: 8px;
+      align-items: end;
+      min-width: 0;
+    }
+
+    .leg-limit-grid {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .leg-limit-row {
+      display: grid;
+      grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
+      grid-template-areas: "name fields";
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .leg-limit-name {
+      grid-area: name;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .leg-limit-fields {
+      grid-area: fields;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .leg-limit-fields input[readonly] {
+      background: var(--panel-2);
+    }
+
+    .leg-limit-actions {
+      grid-area: actions;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .leg-limit-actions button {
+      width: 100%;
+      min-width: 0;
+      padding: 0 8px;
+    }
+
+    .leg-jog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .limit-flow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .limit-step {
+      min-height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      background: white;
+    }
+
+    .limit-step.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .limit-step.done {
+      background: var(--panel-2);
+      color: var(--text);
+    }
+
+    .limit-setup-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .control-surface {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .range-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      min-width: 0;
+    }
+
+    label.check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 23px;
+    }
+
+    .program-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 320px;
+      height: 100%;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      color: var(--text);
+    }
+
+    .log {
+      min-height: 320px;
+      max-height: 520px;
+      overflow: auto;
+      background: #111719;
+      color: #d8eeee;
+      border-radius: 8px;
+      padding: 10px;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .program-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .field-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .leg-grid, .leg-field-grid, .leg-readout {
+        grid-template-columns: 1fr;
+      }
+
+      .leg-limit-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .leg-limit-row {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "name"
+          "fields";
+      }
+
+      .leg-limit-picker {
+        grid-template-columns: 1fr;
+      }
+
+      .top-panel, .connection-row {
+        grid-template-columns: 1fr;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <main>
+      <section class="panel top-panel">
+        <div class="brand">
+          <div>
+            <h1>Robot Dog</h1>
+            <p id="lastMessage" class="subtle">Waiting for board.</p>
+          </div>
+          <div class="status-row">
+            <span id="serialDot" class="dot"></span>
+            <strong id="serialStatus">Disconnected</strong>
+            <span id="boardVersion" class="pill">firmware unknown</span>
+            <span id="wifiStatus" class="pill">Wi-Fi unknown</span>
+          </div>
+        </div>
+        <div class="toolbar top-actions">
+          <button id="addServoButton" class="primary">Add Servo</button>
+          <button id="playButton">Play Program</button>
+          <button id="homeAllButton">Home All</button>
+          <button id="stopButton" class="danger">Stop</button>
+        </div>
+        <div class="connection-row">
+          <label>Board URL<input id="wifiUrl" type="text" autocomplete="off" spellcheck="false"></label>
+          <button id="wifiConnectButton" class="primary">Connect Wi-Fi</button>
+          <button id="connectButton" title="Connect USB serial">USB</button>
+        </div>
+      </section>
+
+      <section id="addServoPanel" class="panel add-servo-panel hidden">
+        <div class="servo-head">
+          <h2>Add Servo</h2>
+          <button id="addServoCloseButton" class="icon" title="Close">x</button>
+        </div>
+        <div class="setup-grid">
+          <label>Servo name<input id="setupServoName" type="text" autocomplete="off" spellcheck="false"></label>
+          <label>Old ID<input id="servoCurrentId" type="number" min="1" max="253" value="1"></label>
+          <label>New ID<input id="servoNextId" type="number" min="1" max="253" value="2"></label>
+        </div>
+        <div class="toolbar">
+          <button id="servoFindButton" class="primary">Program</button>
+        </div>
+        <div id="servoIdLog" class="monitor-log">ready</div>
+      </section>
+
+      <section class="panel leg-panel">
+        <div class="servo-head">
+          <h2>Leg IK</h2>
+          <div class="toolbar">
+            <span id="servoScanStatus" class="pill">IDs unknown</span>
+            <button id="servoScanButton">Scan IDs</button>
+            <button id="legSendButton" class="primary">Send Pose</button>
+          </div>
+        </div>
+        <div class="leg-grid">
+          <div class="leg-visual">
+            <svg id="legSvg" class="leg-svg" viewBox="0 0 400 260" role="img" aria-label="Leg IK preview">
+              <line id="legXAxis" class="leg-axis" x1="0" y1="50" x2="400" y2="50"></line>
+              <line id="legYAxis" class="leg-axis" x1="200" y1="0" x2="200" y2="260"></line>
+              <circle id="legReachOuter" class="leg-reach" cx="200" cy="50" r="185.7"></circle>
+              <circle id="legReachInner" class="leg-reach" cx="200" cy="50" r="15.7"></circle>
+              <line id="legTargetLine" class="leg-target-line" x1="200" y1="50" x2="270" y2="180"></line>
+              <polyline id="legLinks" class="leg-link" points="200,50 248,120 270,180"></polyline>
+              <circle id="legHipPoint" class="leg-joint" cx="200" cy="50" r="6"></circle>
+              <circle id="legKneePoint" class="leg-joint" cx="248" cy="120" r="6"></circle>
+              <circle id="legFootPoint" class="leg-foot" cx="270" cy="180" r="6"></circle>
+            </svg>
+            <div class="leg-readout">
+              <div class="readout-box"><span>Hip joint</span><strong id="legHipJoint">--</strong></div>
+              <div class="readout-box"><span>Knee joint</span><strong id="legKneeJoint">--</strong></div>
+              <div class="readout-box"><span>Hip servo</span><strong id="legHipServoAngle">--</strong></div>
+              <div class="readout-box"><span>Knee servo</span><strong id="legKneeServoAngle">--</strong></div>
+            </div>
+          </div>
+          <div class="leg-controls">
+            <div class="leg-field-grid">
+              <label>Hip ID<select id="legHipServo"></select></label>
+              <label>Knee ID<select id="legKneeServo"></select></label>
+              <label class="check"><input id="legLiveMove" type="checkbox">Live move</label>
+            </div>
+            <div class="leg-field-grid">
+              <label>Scan start<input id="servoScanStart" type="number" min="1" max="253" value="1"></label>
+              <label>Scan end<input id="servoScanEnd" type="number" min="1" max="253" value="20"></label>
+              <label>2nd joint<select id="legKneeCompensation">
+                <option value="follow">Follows first</option>
+                <option value="relative">Relative knee</option>
+                <option value="oppose">Opposes first</option>
+              </select></label>
+            </div>
+            <div class="leg-field-grid">
+              <label>X mm<input id="legXInput" type="number" min="-180" max="180" step="1"></label>
+              <label>Y mm<input id="legYInput" type="number" min="-40" max="180" step="1"></label>
+              <label>Knee bend<select id="legBend">
+                <option value="down">Bend down</option>
+                <option value="up">Bend up</option>
+              </select></label>
+            </div>
+            <div class="control-surface">
+              <div class="range-head"><span>X</span><strong id="legXValue">--</strong></div>
+              <input id="legXRange" type="range" min="-180" max="180" step="1">
+            </div>
+            <div class="control-surface">
+              <div class="range-head"><span>Y</span><strong id="legYValue">--</strong></div>
+              <input id="legYRange" type="range" min="-40" max="180" step="1">
+            </div>
+            <div class="leg-field-grid">
+              <label>Hip zero<input id="legHipZero" type="number" min="0" max="360" step="1"></label>
+              <label>Hip dir<select id="legHipDirection">
+                <option value="1">Normal</option>
+                <option value="-1">Reverse</option>
+              </select></label>
+              <label>Hip trim<input id="legHipTrim" type="number" min="-180" max="180" step="1"></label>
+            </div>
+            <div class="leg-field-grid">
+              <label>Knee zero<input id="legKneeZero" type="number" min="0" max="360" step="1"></label>
+              <label>Knee dir<select id="legKneeDirection">
+                <option value="1">Normal</option>
+                <option value="-1">Reverse</option>
+              </select></label>
+              <label>Knee trim<input id="legKneeTrim" type="number" min="-180" max="180" step="1"></label>
+            </div>
+            <div class="leg-limits">
+              <div class="leg-limit-head">
+                <h3>Servo limits</h3>
+                <div class="status-row">
+                  <span id="limitServoMeasured" class="pill">setup --</span>
+                  <span id="legLimitStatus" class="pill">limits ready</span>
+                </div>
+              </div>
+              <div class="leg-limit-picker">
+                <label>Setup servo<select id="limitServoSelect"></select></label>
+                <label>Torque %<input id="limitServoTorque" type="number" min="5" max="100" step="5" value="40"></label>
+              </div>
+              <div class="limit-flow">
+                <span id="limitStepMin" class="limit-step">1 Min</span>
+                <span id="limitStepMax" class="limit-step">2 Max</span>
+                <span id="limitStepSave" class="limit-step">3 Save</span>
+              </div>
+              <div class="leg-limit-grid">
+                <div class="leg-limit-row">
+                  <span id="limitServoName" class="leg-limit-name">Servo</span>
+                  <div class="leg-limit-fields">
+                    <label>Min<input id="limitServoMin" type="number" min="0" max="360" step="0.1" readonly></label>
+                    <label>Max<input id="limitServoMax" type="number" min="0" max="360" step="0.1" readonly></label>
+                  </div>
+                </div>
+              </div>
+              <div class="leg-jog-grid">
+                <button class="limit-servo-jog" data-delta="-10">-10</button>
+                <button class="limit-servo-jog" data-delta="-2">-2</button>
+                <button class="limit-servo-jog" data-delta="-tick">-1 tick</button>
+                <button class="limit-servo-jog" data-delta="tick">+1 tick</button>
+                <button class="limit-servo-jog" data-delta="2">+2</button>
+                <button class="limit-servo-jog" data-delta="10">+10</button>
+              </div>
+              <div class="limit-setup-actions">
+                <button id="limitSetupStartButton">Start Setup</button>
+                <button id="limitConfirmMinButton">Set Min Here</button>
+                <button id="limitConfirmMaxButton">Set Max Here</button>
+                <button id="legSaveLimitsButton" class="primary">Save Limits</button>
+              </div>
+            </div>
+            <div class="status-row">
+              <span id="legStatus" class="pill">ready</span>
+              <span id="legFootReadout" class="pill">foot --</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div id="servoGrid" class="grid"></div>
+      </section>
+
+      <details class="panel">
+        <summary>Program Editor</summary>
+        <div class="program-grid">
+          <div>
+            <div class="toolbar" style="margin-bottom: 10px;">
+              <button id="capturePoseButton">Capture Pose</button>
+            </div>
+            <textarea id="programText" spellcheck="false"></textarea>
+          </div>
+          <div>
+            <h2>Console</h2>
+            <div id="log" class="log"></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="panel">
+        <summary>Diagnostics</summary>
+        <section class="grid">
+          <div>
+          <div class="servo-head">
+            <h2>IMU Monitor</h2>
+            <div class="toolbar">
+              <button id="imuToggleButton">Pause Monitor</button>
+              <button id="imuReadButton">Read</button>
+            </div>
+          </div>
+          <div class="servo-readout">
+            <div class="readout-box"><span>Roll</span><strong id="imuRoll">--</strong></div>
+            <div class="readout-box"><span>Pitch</span><strong id="imuPitch">--</strong></div>
+            <div class="readout-box"><span>Yaw</span><strong id="imuYaw">--</strong></div>
+            <div class="readout-box"><span>Status</span><strong id="imuStatus">unknown</strong></div>
+          </div>
+          <div class="field-grid" style="margin-top: 10px;">
+            <label>Monitor ms<input id="imuInterval" type="number" min="50" max="5000" step="50" value="100"></label>
+          </div>
+          <div id="imuLog" class="monitor-log" style="margin-top: 10px;">waiting for IMU data</div>
+          </div>
+
+          <div>
+          <div class="servo-head">
+            <h2>DC Motor Test</h2>
+            <div class="toolbar">
+              <button id="motorStopButton" class="danger">Stop Motors</button>
+            </div>
+          </div>
+          <div id="motorGrid" class="grid"></div>
+          </div>
+        </section>
+      </details>
+
+    </main>
+  </div>
+
+  <script>
+    const DEFAULT_SERVOS = [
+      { id: 1, name: "Front left test", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: true, monitorInterval: 250 },
+      { id: 2, name: "Front right test", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: true, monitorInterval: 250 }
+    ];
+
+    const DEFAULT_PROGRAM = {
+      loop: false,
+      steps: [
+        { ms: 450, poses: { "1": 150, "2": 210 } },
+        { ms: 450, poses: { "1": 210, "2": 150 } },
+        { ms: 450, poses: { "1": 180, "2": 180 } }
+      ]
+    };
+
+    const LEG_LINKS = {
+      hip: 85,
+      knee: 100.7
+    };
+    const SERVO_TICK_DEGREES = 360 / 4095;
+
+    const DEFAULT_LEG_CONFIG = {
+      hipId: 1,
+      kneeId: 2,
+      x: 70,
+      y: 130,
+      bend: "down",
+      kneeCompensation: "follow",
+      hipZero: 180,
+      hipDirection: 1,
+      hipTrim: 0,
+      kneeZero: 180,
+      kneeDirection: 1,
+      kneeTrim: 0,
+      liveMove: false,
+      scanStart: 1,
+      scanEnd: 20,
+      limitId: 1
+    };
+
+    const JOINT_OPTIONS = [
+      "Front left hip",
+      "Front left knee",
+      "Front right hip",
+      "Front right knee",
+      "Back left hip",
+      "Back left knee",
+      "Back right hip",
+      "Back right knee",
+      "Neck",
+      "Tail",
+      "Test servo"
+    ];
+
+    let port;
+    let reader;
+    let writer;
+    let readBuffer = "";
+    let transport = null;
+    let wifiBaseUrl = "";
+    let wifiAfter = 0;
+    let wifiPollTimer;
+    let wifiPollInFlight = false;
+    let servos = loadLocalServos();
+    let positions = Object.fromEntries(servos.map((servo) => [servo.id, servo.last ?? servo.home]));
+    let measuredPositions = Object.fromEntries(servos.map((servo) => [servo.id, servo.measured ?? null]));
+    let servoVelocities = Object.fromEntries(servos.map((servo) => [servo.id, servo.velocity ?? 0]));
+    let servoMotorSpeeds = Object.fromEntries(servos.map((servo) => [servo.id, servo.motorSpeed ?? 0]));
+    let servoControlModes = {};
+    let availableServoIds = loadAvailableServoIds();
+    let legConfig = loadLegConfig();
+    let limitSetup = { id: null, step: "idle", min: null, max: null };
+    let lastLegSendAt = 0;
+    let legSendInFlight = false;
+    let lastVelocitySendAt = {};
+    let lastMotorSendAt = {};
+    let activeSetupId = Number(localStorage.getItem("robotDogActiveSetupId") || 0);
+    let pendingServoProgram = null;
+    let imuMonitorEnabled = true;
+    let imuLogLines = [];
+    let motors = [
+      { id: "A", speed: 0, limit: 0.35 },
+      { id: "B", speed: 0, limit: 0.35 }
+    ];
+
+    const els = {
+      connectButton: document.querySelector("#connectButton"),
+      serialDot: document.querySelector("#serialDot"),
+      serialStatus: document.querySelector("#serialStatus"),
+      boardVersion: document.querySelector("#boardVersion"),
+      wifiStatus: document.querySelector("#wifiStatus"),
+      lastMessage: document.querySelector("#lastMessage"),
+      wifiUrl: document.querySelector("#wifiUrl"),
+      wifiConnectButton: document.querySelector("#wifiConnectButton"),
+      servoGrid: document.querySelector("#servoGrid"),
+      addServoPanel: document.querySelector("#addServoPanel"),
+      addServoButton: document.querySelector("#addServoButton"),
+      addServoCloseButton: document.querySelector("#addServoCloseButton"),
+      servoCurrentId: document.querySelector("#servoCurrentId"),
+      servoNextId: document.querySelector("#servoNextId"),
+      setupServoName: document.querySelector("#setupServoName"),
+      servoFindButton: document.querySelector("#servoFindButton"),
+      servoIdLog: document.querySelector("#servoIdLog"),
+      servoScanButton: document.querySelector("#servoScanButton"),
+      servoScanStatus: document.querySelector("#servoScanStatus"),
+      servoScanStart: document.querySelector("#servoScanStart"),
+      servoScanEnd: document.querySelector("#servoScanEnd"),
+      legSvg: document.querySelector("#legSvg"),
+      legReachOuter: document.querySelector("#legReachOuter"),
+      legReachInner: document.querySelector("#legReachInner"),
+      legTargetLine: document.querySelector("#legTargetLine"),
+      legLinks: document.querySelector("#legLinks"),
+      legKneePoint: document.querySelector("#legKneePoint"),
+      legFootPoint: document.querySelector("#legFootPoint"),
+      legHipServo: document.querySelector("#legHipServo"),
+      legKneeServo: document.querySelector("#legKneeServo"),
+      legLiveMove: document.querySelector("#legLiveMove"),
+      legXInput: document.querySelector("#legXInput"),
+      legYInput: document.querySelector("#legYInput"),
+      legXRange: document.querySelector("#legXRange"),
+      legYRange: document.querySelector("#legYRange"),
+      legXValue: document.querySelector("#legXValue"),
+      legYValue: document.querySelector("#legYValue"),
+      legBend: document.querySelector("#legBend"),
+      legKneeCompensation: document.querySelector("#legKneeCompensation"),
+      legHipZero: document.querySelector("#legHipZero"),
+      legHipDirection: document.querySelector("#legHipDirection"),
+      legHipTrim: document.querySelector("#legHipTrim"),
+      legKneeZero: document.querySelector("#legKneeZero"),
+      legKneeDirection: document.querySelector("#legKneeDirection"),
+      legKneeTrim: document.querySelector("#legKneeTrim"),
+      limitServoSelect: document.querySelector("#limitServoSelect"),
+      limitServoName: document.querySelector("#limitServoName"),
+      limitServoMin: document.querySelector("#limitServoMin"),
+      limitServoMax: document.querySelector("#limitServoMax"),
+      limitServoTorque: document.querySelector("#limitServoTorque"),
+      limitServoMeasured: document.querySelector("#limitServoMeasured"),
+      legLimitStatus: document.querySelector("#legLimitStatus"),
+      limitServoJogButtons: document.querySelectorAll(".limit-servo-jog"),
+      limitSetupStartButton: document.querySelector("#limitSetupStartButton"),
+      limitConfirmMinButton: document.querySelector("#limitConfirmMinButton"),
+      limitConfirmMaxButton: document.querySelector("#limitConfirmMaxButton"),
+      limitStepMin: document.querySelector("#limitStepMin"),
+      limitStepMax: document.querySelector("#limitStepMax"),
+      limitStepSave: document.querySelector("#limitStepSave"),
+      legSaveLimitsButton: document.querySelector("#legSaveLimitsButton"),
+      legHipJoint: document.querySelector("#legHipJoint"),
+      legKneeJoint: document.querySelector("#legKneeJoint"),
+      legHipServoAngle: document.querySelector("#legHipServoAngle"),
+      legKneeServoAngle: document.querySelector("#legKneeServoAngle"),
+      legStatus: document.querySelector("#legStatus"),
+      legFootReadout: document.querySelector("#legFootReadout"),
+      legSendButton: document.querySelector("#legSendButton"),
+      homeAllButton: document.querySelector("#homeAllButton"),
+      stopButton: document.querySelector("#stopButton"),
+      imuToggleButton: document.querySelector("#imuToggleButton"),
+      imuReadButton: document.querySelector("#imuReadButton"),
+      imuInterval: document.querySelector("#imuInterval"),
+      imuRoll: document.querySelector("#imuRoll"),
+      imuPitch: document.querySelector("#imuPitch"),
+      imuYaw: document.querySelector("#imuYaw"),
+      imuStatus: document.querySelector("#imuStatus"),
+      imuLog: document.querySelector("#imuLog"),
+      motorGrid: document.querySelector("#motorGrid"),
+      motorStopButton: document.querySelector("#motorStopButton"),
+      capturePoseButton: document.querySelector("#capturePoseButton"),
+      playButton: document.querySelector("#playButton"),
+      programText: document.querySelector("#programText"),
+      log: document.querySelector("#log")
+    };
+
+    els.programText.value = JSON.stringify(DEFAULT_PROGRAM, null, 2);
+    els.wifiUrl.value = defaultWifiUrl();
+    populateServoOptions();
+    populateLegControls();
+
+    function loadLocalServos() {
+      try {
+        return JSON.parse(localStorage.getItem("robotDogServos")) || structuredClone(DEFAULT_SERVOS);
+      } catch {
+        return structuredClone(DEFAULT_SERVOS);
+      }
+    }
+
+    function saveLocalServos() {
+      localStorage.setItem("robotDogServos", JSON.stringify(servos));
+    }
+
+    function loadAvailableServoIds() {
+      try {
+        const ids = JSON.parse(localStorage.getItem("robotDogAvailableServoIds")) || [];
+        return ids.map(Number).filter((id) => Number.isInteger(id) && id >= 1 && id <= 253);
+      } catch {
+        return [];
+      }
+    }
+
+    function saveAvailableServoIds() {
+      localStorage.setItem("robotDogAvailableServoIds", JSON.stringify(availableServoIds));
+    }
+
+    function loadLegConfig() {
+      try {
+        return { ...DEFAULT_LEG_CONFIG, ...(JSON.parse(localStorage.getItem("robotDogLegIk")) || {}) };
+      } catch {
+        return { ...DEFAULT_LEG_CONFIG };
+      }
+    }
+
+    function saveLegConfig() {
+      localStorage.setItem("robotDogLegIk", JSON.stringify(legConfig));
+    }
+
+    function populateServoOptions() {
+      const nextName = nextUnusedJointName();
+      els.setupServoName.placeholder = nextName;
+      if (!els.setupServoName.value.trim()) els.setupServoName.value = nextName;
+    }
+
+    function nextUnusedJointName() {
+      const used = new Set(servos.map((servo) => String(servo.name || "").toLowerCase()));
+      return JOINT_OPTIONS.find((name) => !used.has(name.toLowerCase())) || "Test servo";
+    }
+
+    function selectedServoName() {
+      return els.setupServoName.value.trim() || nextUnusedJointName();
+    }
+
+    function prepareAddServoPanel() {
+      els.servoCurrentId.value = 1;
+      els.servoNextId.value = nextAvailableServoId();
+      els.setupServoName.value = nextUnusedJointName();
+    }
+
+    function defaultWifiUrl() {
+      const savedUrl = localStorage.getItem("robotDogWifiUrl");
+      if (savedUrl && !isLocalUrl(savedUrl)) return savedUrl;
+
+      if (location.protocol === "http:" || location.protocol === "https:") {
+        const localHosts = ["localhost", "127.0.0.1", "::1"];
+        if (localHosts.includes(location.hostname)) {
+          return "http://10.1.39.32/";
+        }
+        return location.origin;
+      }
+      return "http://10.1.39.32/";
+    }
+
+    function isLocalUrl(value) {
+      try {
+        const url = new URL(value);
+        return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+      } catch {
+        return false;
+      }
+    }
+
+    function normalizeBaseUrl(value) {
+      let next = String(value || "").trim();
+      if (!next) next = defaultWifiUrl();
+      if (!/^https?:\/\//i.test(next)) next = `http://${next}`;
+      return next.replace(/\/+$/, "");
+    }
+
+    function setConnected(isConnected, mode = transport) {
+      const label = mode === "wifi" ? "Wi-Fi" : "USB serial";
+      els.serialDot.classList.toggle("connected", isConnected);
+      els.serialStatus.textContent = isConnected ? `${label} connected` : "Disconnected";
+      els.connectButton.textContent = transport === "serial" ? "Disconnect USB" : "USB";
+      els.wifiConnectButton.textContent = transport === "wifi" ? "Disconnect Wi-Fi" : "Connect Wi-Fi";
+    }
+
+    function logLine(text, direction = "info") {
+      const time = new Date().toLocaleTimeString();
+      const prefix = direction === "tx" ? ">" : direction === "rx" ? "<" : "-";
+      els.log.textContent += `[${time}] ${prefix} ${text}\n`;
+      els.log.scrollTop = els.log.scrollHeight;
+    }
+
+    function populateLegControls() {
+      populateLegServoOptions();
+      els.servoScanStart.value = legConfig.scanStart;
+      els.servoScanEnd.value = legConfig.scanEnd;
+      els.legXInput.value = legConfig.x;
+      els.legYInput.value = legConfig.y;
+      els.legXRange.value = legConfig.x;
+      els.legYRange.value = legConfig.y;
+      els.legBend.value = legConfig.bend;
+      els.legKneeCompensation.value = legConfig.kneeCompensation;
+      els.legHipZero.value = legConfig.hipZero;
+      els.legHipDirection.value = String(legConfig.hipDirection);
+      els.legHipTrim.value = legConfig.hipTrim;
+      els.legKneeZero.value = legConfig.kneeZero;
+      els.legKneeDirection.value = String(legConfig.kneeDirection);
+      els.legKneeTrim.value = legConfig.kneeTrim;
+      els.legLiveMove.checked = Boolean(legConfig.liveMove);
+      syncLegLimitControls();
+      updateServoScanStatus();
+      updateLegIk();
+    }
+
+    function populateLegServoOptions() {
+      const selectedHip = Number(legConfig.hipId || DEFAULT_LEG_CONFIG.hipId);
+      const selectedKnee = Number(legConfig.kneeId || DEFAULT_LEG_CONFIG.kneeId);
+      const selectedLimit = Number(legConfig.limitId || selectedHip || DEFAULT_LEG_CONFIG.limitId);
+      const ids = allAssignableServoIds();
+      const options = ids.map((id) => `<option value="${id}">${escapeHtml(legServoLabel(id))}</option>`).join("");
+      els.legHipServo.innerHTML = options;
+      els.legKneeServo.innerHTML = options;
+      els.limitServoSelect.innerHTML = options;
+      els.legHipServo.value = String(selectedHip);
+      els.legKneeServo.value = String(selectedKnee);
+      els.limitServoSelect.value = String(selectedLimit);
+      if (!els.legHipServo.value && ids.length) {
+        legConfig.hipId = ids[0];
+        els.legHipServo.value = String(ids[0]);
+      }
+      if (!els.legKneeServo.value && ids.length > 1) {
+        legConfig.kneeId = ids[1];
+        els.legKneeServo.value = String(ids[1]);
+      }
+      if (!els.limitServoSelect.value && ids.length) {
+        legConfig.limitId = ids[0];
+        els.limitServoSelect.value = String(ids[0]);
+      }
+    }
+
+    function allAssignableServoIds() {
+      const ids = new Set([
+        ...availableServoIds,
+        ...servos.map((servo) => Number(servo.id)),
+        Number(legConfig.hipId),
+        Number(legConfig.kneeId),
+        Number(legConfig.limitId)
+      ]);
+      return [...ids]
+        .filter((id) => Number.isInteger(id) && id >= 1 && id <= 253)
+        .sort((a, b) => a - b);
+    }
+
+    function legServoLabel(id) {
+      const servo = servos.find((item) => Number(item.id) === Number(id));
+      const scanned = availableServoIds.includes(Number(id));
+      const name = servo ? ` - ${servo.name || `Servo ${id}`}` : "";
+      const source = scanned ? "" : " saved";
+      return `ID ${id}${name}${source}`;
+    }
+
+    function updateServoScanStatus() {
+      els.servoScanStatus.textContent = availableServoIds.length
+        ? `plugged ${availableServoIds.join(", ")}`
+        : "IDs unknown";
+    }
+
+    function readLegControls() {
+      legConfig.hipId = clampInt(els.legHipServo.value, 1, 253, legConfig.hipId);
+      legConfig.kneeId = clampInt(els.legKneeServo.value, 1, 253, legConfig.kneeId);
+      legConfig.limitId = clampInt(els.limitServoSelect.value, 1, 253, legConfig.limitId || legConfig.hipId);
+      legConfig.scanStart = clampInt(els.servoScanStart.value, 1, 253, legConfig.scanStart);
+      legConfig.scanEnd = clampInt(els.servoScanEnd.value, 1, 253, legConfig.scanEnd);
+      legConfig.x = clamp(Number(els.legXInput.value || legConfig.x), -180, 180);
+      legConfig.y = clamp(Number(els.legYInput.value || legConfig.y), -40, 180);
+      legConfig.bend = els.legBend.value === "up" ? "up" : "down";
+      legConfig.kneeCompensation = ["follow", "relative", "oppose"].includes(els.legKneeCompensation.value)
+        ? els.legKneeCompensation.value
+        : "follow";
+      legConfig.hipZero = clamp(Number(els.legHipZero.value || DEFAULT_LEG_CONFIG.hipZero), 0, 360);
+      legConfig.hipDirection = Number(els.legHipDirection.value) === -1 ? -1 : 1;
+      legConfig.hipTrim = clamp(Number(els.legHipTrim.value || 0), -180, 180);
+      legConfig.kneeZero = clamp(Number(els.legKneeZero.value || DEFAULT_LEG_CONFIG.kneeZero), 0, 360);
+      legConfig.kneeDirection = Number(els.legKneeDirection.value) === -1 ? -1 : 1;
+      legConfig.kneeTrim = clamp(Number(els.legKneeTrim.value || 0), -180, 180);
+      legConfig.liveMove = els.legLiveMove.checked;
+      saveLegConfig();
+    }
+
+    function syncLegControlValues() {
+      els.servoScanStart.value = legConfig.scanStart;
+      els.servoScanEnd.value = legConfig.scanEnd;
+      els.legXInput.value = Math.round(legConfig.x);
+      els.legYInput.value = Math.round(legConfig.y);
+      els.legXRange.value = legConfig.x;
+      els.legYRange.value = legConfig.y;
+      els.legXValue.textContent = `${Math.round(legConfig.x)} mm`;
+      els.legYValue.textContent = `${Math.round(legConfig.y)} mm`;
+    }
+
+    function servoById(id) {
+      return servos.find((servo) => Number(servo.id) === Number(id));
+    }
+
+    function setupServoId() {
+      return Number(legConfig.limitId || els.limitServoSelect.value);
+    }
+
+    function setupServoLabel(id = setupServoId()) {
+      const servo = servoById(id);
+      return servo?.name || `Servo ${id}`;
+    }
+
+    function limitServo(create = false) {
+      const id = setupServoId();
+      if (!Number.isInteger(id) || id < 1 || id > 253) return null;
+
+      let servo = servoById(id);
+      if (!servo && create) {
+        ensureLegServoConfigured(id, setupServoLabel(id));
+        servo = servoById(id);
+      }
+      return servo || null;
+    }
+
+    function normalizedLimitPair(minValue, maxValue, fallbackMin = 0, fallbackMax = 360) {
+      let min = Number(minValue);
+      let max = Number(maxValue);
+      if (!Number.isFinite(min)) min = fallbackMin;
+      if (!Number.isFinite(max)) max = fallbackMax;
+      min = clamp(min, 0, 360);
+      max = clamp(max, 0, 360);
+      if (max < min) [min, max] = [max, min];
+      if (max - min < 1) {
+        if (min < 359) {
+          max = min + 1;
+        } else {
+          min = max - 1;
+        }
+      }
+      return { min, max };
+    }
+
+    function setupServoLimits() {
+      const servo = limitServo();
+      return normalizedLimitPair(servo?.min, servo?.max);
+    }
+
+    function syncLegLimitControls() {
+      const id = setupServoId();
+      if (Number.isInteger(id) && id >= 1 && id <= 253) {
+        els.limitServoSelect.value = String(id);
+      }
+
+      const limits = setupServoLimits();
+      els.limitServoMin.value = formatLimitValue(limits.min);
+      els.limitServoMax.value = formatLimitValue(limits.max);
+      els.limitServoName.textContent = setupServoLabel(id);
+      if (Number(limitSetup.id) !== Number(id)) {
+        const hadSetup = limitSetup.id !== null;
+        limitSetup = { id, step: "idle", min: null, max: null };
+        if (hadSetup) setLegLimitStatus("setup ready");
+      }
+      updateLimitSetupUi();
+      syncLegLimitReadouts();
+    }
+
+    function syncLegLimitReadouts() {
+      const angle = currentSetupAngle(setupServoId());
+      els.limitServoMeasured.textContent = `setup ${Number.isFinite(angle) ? `${formatAngle(angle)} deg` : "--"}`;
+    }
+
+    function setLegLimitStatus(text) {
+      els.legLimitStatus.textContent = text;
+    }
+
+    function sameSetupServo() {
+      return Number(limitSetup.id) === setupServoId();
+    }
+
+    function currentSetupAngle(id = setupServoId()) {
+      const commanded = Number(positions[id]);
+      if (Number.isFinite(commanded)) return commanded;
+      const servo = servoById(id);
+      const fallback = Number(servo?.last ?? servo?.home);
+      if (Number.isFinite(fallback)) return fallback;
+      const measured = Number(measuredPositions[id]);
+      return Number.isFinite(measured) ? measured : null;
+    }
+
+    function formatLimitValue(value) {
+      return Number(value).toFixed(2).replace(/\.?0+$/, "");
+    }
+
+    function updateLimitSetupUi() {
+      const step = sameSetupServo() ? limitSetup.step : "idle";
+      const minDone = step === "max" || step === "done";
+      const maxDone = step === "done";
+
+      els.limitStepMin.classList.toggle("active", step === "min");
+      els.limitStepMax.classList.toggle("active", step === "max");
+      els.limitStepSave.classList.toggle("active", step === "done");
+      els.limitStepMin.classList.toggle("done", minDone);
+      els.limitStepMax.classList.toggle("done", maxDone);
+      els.limitStepSave.classList.toggle("done", maxDone);
+
+      els.limitSetupStartButton.textContent = step === "idle" ? "Start Setup" : "Restart Setup";
+      els.limitConfirmMinButton.disabled = step !== "min";
+      els.limitConfirmMaxButton.disabled = step !== "max";
+      els.legSaveLimitsButton.disabled = step !== "done";
+    }
+
+    async function startLimitSetup() {
+      if (!(await ensureLimitServoConfigured())) return;
+      const id = setupServoId();
+      const angle = currentSetupAngle(id);
+      limitSetup = { id, step: "min", min: null, max: null };
+      await setLimitServoTorqueLimit();
+      if (Number.isFinite(angle)) {
+        positions[id] = clamp(angle, 0, 360);
+        measuredPositions[id] = positions[id];
+      }
+      syncLegLimitReadouts();
+      setLegLimitStatus("jog to min");
+      updateLimitSetupUi();
+    }
+
+    function confirmLimitEndpoint(edge) {
+      if (!sameSetupServo() || !["min", "max"].includes(limitSetup.step)) {
+        setLegLimitStatus("start setup first");
+        return;
+      }
+
+      if (edge === "min" && limitSetup.step !== "min") return;
+      if (edge === "max" && limitSetup.step !== "max") return;
+
+      const id = setupServoId();
+      finishLimitEndpoint(edge, currentSetupAngle(id));
+    }
+
+    function finishLimitEndpoint(edge, angle) {
+      if (!sameSetupServo() || !["min", "max"].includes(limitSetup.step)) {
+        setLegLimitStatus("start setup first");
+        return;
+      }
+
+      if (edge === "min" && limitSetup.step !== "min") return;
+      if (edge === "max" && limitSetup.step !== "max") return;
+
+      if (!Number.isFinite(angle)) {
+        setLegLimitStatus("read failed");
+        return;
+      }
+
+      const limited = clamp(angle, 0, 360);
+      if (edge === "min") {
+        limitSetup.min = limited;
+        els.limitServoMin.value = formatLimitValue(limited);
+        limitSetup.step = "max";
+        setLegLimitStatus("jog to max");
+      } else {
+        limitSetup.max = limited;
+        els.limitServoMax.value = formatLimitValue(limited);
+        limitSetup.step = "done";
+        setLegLimitStatus("ready to save");
+      }
+      updateLimitSetupUi();
+    }
+
+    function mergeMeasuredFromState(updatedMeasured = {}, setupFrame = false) {
+      for (const [id, value] of Object.entries(updatedMeasured || {})) {
+        if (!setupFrame && sameSetupServo() && ["min", "max"].includes(limitSetup.step) && Number(id) === setupServoId()) {
+          continue;
+        }
+        measuredPositions[id] = value;
+      }
+    }
+
+    function setupTorqueLimit() {
+      const percent = clamp(Number(els.limitServoTorque.value || 40), 5, 100);
+      els.limitServoTorque.value = Math.round(percent);
+      return Math.round(percent * 10);
+    }
+
+    async function setLimitServoTorqueLimit() {
+      if (!(await ensureLimitServoConfigured())) return false;
+      const id = setupServoId();
+      const limit = setupTorqueLimit();
+      await send({ cmd: "servo_torque_limit", id, limit });
+      setLegLimitStatus(`${setupServoLabel(id)} torque ${Math.round(limit / 10)}%`);
+      return true;
+    }
+
+    function applyLimitInputs(render = true) {
+      const servo = limitServo(true);
+      if (!servo) {
+        setLegLimitStatus("select servo");
+        return false;
+      }
+
+      const limits = normalizedLimitPair(els.limitServoMin.value, els.limitServoMax.value, servo.min, servo.max);
+      servo.min = limits.min;
+      servo.max = limits.max;
+      servo.home = clamp(Number(servo.home ?? 180), limits.min, limits.max);
+      positions[servo.id] = clamp(Number(positions[servo.id] ?? servo.home), limits.min, limits.max);
+      servo.last = positions[servo.id];
+      saveLocalServos();
+
+      if (render) {
+        syncLegLimitControls();
+        renderServos();
+        updateLegIk();
+      }
+      return true;
+    }
+
+    async function ensureLimitServoConfigured() {
+      readLegControls();
+      const id = setupServoId();
+      if (!Number.isInteger(id) || id < 1 || id > 253) {
+        setLegLimitStatus("select servo");
+        return false;
+      }
+
+      const hadServo = Boolean(servoById(id));
+      ensureLegServoConfigured(id, setupServoLabel(id));
+      if (!servoById(id)) {
+        setLegLimitStatus("servo list full");
+        return false;
+      }
+
+      if (!hadServo) {
+        renderServos();
+        populateLegServoOptions();
+        syncLegLimitControls();
+        await send({ cmd: "config_set", servos: normalizedServos() });
+      }
+      return true;
+    }
+
+    async function jogLimitServo(delta) {
+      if (!(await ensureLimitServoConfigured())) return;
+      const id = setupServoId();
+      if (!sameSetupServo() || limitSetup.step === "idle") {
+        limitSetup = { id, step: "min", min: null, max: null };
+        updateLimitSetupUi();
+      }
+      servoVelocities[id] = 0;
+      servoMotorSpeeds[id] = 0;
+      const base = clamp(Number(currentSetupAngle(id) ?? 180), 0, 360);
+      const target = clamp(base + Number(delta), 0, 360);
+      const actualDelta = target - base;
+      if (Math.abs(actualDelta) < SERVO_TICK_DEGREES / 2) {
+        setLegLimitStatus(`${setupServoLabel(id)} at ${formatAngle(base)} deg`);
+        return;
+      }
+
+      positions[id] = target;
+      measuredPositions[id] = target;
+      const servo = servoById(id);
+      if (servo) servo.last = target;
+      syncLegLimitReadouts();
+      renderServos();
+      await setLimitServoTorqueLimit();
+      await send({ cmd: "servo_jog", id, delta: actualDelta, base, speed: 700, accel: 20, setup: true });
+      setLegLimitStatus(`${setupServoLabel(id)} jog to ${formatAngle(target)} deg`);
+    }
+
+    async function saveLegLimits() {
+      readLegControls();
+      const id = setupServoId();
+      if (!Number.isInteger(id) || id < 1 || id > 253) {
+        setLegLimitStatus("select servo");
+        return;
+      }
+      if (!sameSetupServo() || limitSetup.step !== "done") {
+        setLegLimitStatus("confirm min and max");
+        updateLimitSetupUi();
+        return;
+      }
+      if (!(await ensureLimitServoConfigured())) return;
+
+      if (!applyLimitInputs(false)) return;
+
+      renderServos();
+      syncLegLimitControls();
+      updateLegIk();
+      await send({ cmd: "config_set", servos: normalizedServos() });
+      setLegLimitStatus("limits saved");
+    }
+
+    function solveLegIk(x, y) {
+      const upper = LEG_LINKS.hip;
+      const lower = LEG_LINKS.knee;
+      const minReach = Math.abs(upper - lower) + 0.001;
+      const maxReach = upper + lower - 0.001;
+      const rawDistance = Math.hypot(x, y);
+      let targetX = x;
+      let targetY = y;
+      let distance = rawDistance;
+      let reachable = rawDistance >= minReach && rawDistance <= maxReach;
+
+      if (distance > maxReach) {
+        const scale = maxReach / distance;
+        targetX *= scale;
+        targetY *= scale;
+        distance = maxReach;
+      } else if (distance < minReach) {
+        if (distance < 0.001) {
+          targetX = minReach;
+          targetY = 0;
+        } else {
+          const scale = minReach / distance;
+          targetX *= scale;
+          targetY *= scale;
+        }
+        distance = minReach;
+      }
+
+      const kneeCos = clamp((distance * distance - upper * upper - lower * lower) / (2 * upper * lower), -1, 1);
+      const bendSign = legConfig.bend === "up" ? -1 : 1;
+      const kneeRad = bendSign * Math.acos(kneeCos);
+      const hipRad = Math.atan2(targetY, targetX) - Math.atan2(lower * Math.sin(kneeRad), upper + lower * Math.cos(kneeRad));
+      const lowerRad = hipRad + kneeRad;
+      const kneeX = upper * Math.cos(hipRad);
+      const kneeY = upper * Math.sin(hipRad);
+      const footX = kneeX + lower * Math.cos(lowerRad);
+      const footY = kneeY + lower * Math.sin(lowerRad);
+
+      return {
+        reachable,
+        hipDeg: radToDeg(hipRad),
+        kneeDeg: radToDeg(kneeRad),
+        lowerDeg: radToDeg(lowerRad),
+        kneeX,
+        kneeY,
+        footX,
+        footY,
+        targetX,
+        targetY
+      };
+    }
+
+    function legServoTargets(solution) {
+      let kneeDriveDeg = solution.kneeDeg;
+      if (legConfig.kneeCompensation === "follow") kneeDriveDeg += solution.hipDeg;
+      if (legConfig.kneeCompensation === "oppose") kneeDriveDeg -= solution.hipDeg;
+
+      const hipRaw = legConfig.hipZero + legConfig.hipTrim + legConfig.hipDirection * solution.hipDeg;
+      const kneeRaw = legConfig.kneeZero + legConfig.kneeTrim + legConfig.kneeDirection * kneeDriveDeg;
+      const hipLimited = limitServoTarget(legConfig.hipId, hipRaw);
+      const kneeLimited = limitServoTarget(legConfig.kneeId, kneeRaw);
+
+      return {
+        hipRaw,
+        kneeRaw,
+        hipAngle: hipLimited.angle,
+        kneeAngle: kneeLimited.angle,
+        hipClamped: hipLimited.clamped,
+        kneeClamped: kneeLimited.clamped,
+        kneeDriveDeg
+      };
+    }
+
+    function limitServoTarget(id, angle) {
+      const servo = servos.find((item) => Number(item.id) === Number(id));
+      const min = Number(servo?.min ?? 0);
+      const max = Number(servo?.max ?? 360);
+      const limited = clamp(angle, min, max);
+      return {
+        angle: limited,
+        clamped: Math.abs(limited - angle) > 0.001
+      };
+    }
+
+    function updateLegIk() {
+      readLegControls();
+      syncLegControlValues();
+      const solution = solveLegIk(legConfig.x, legConfig.y);
+      const targets = legServoTargets(solution);
+      updateLegPreview(solution);
+
+      els.legHipJoint.textContent = `${formatAngle(solution.hipDeg)} deg`;
+      els.legKneeJoint.textContent = `${formatAngle(solution.kneeDeg)} deg`;
+      els.legHipServoAngle.textContent = `${formatAngle(targets.hipAngle)} deg`;
+      els.legKneeServoAngle.textContent = `${formatAngle(targets.kneeAngle)} deg`;
+      els.legFootReadout.textContent = `foot ${Math.round(solution.targetX)}, ${Math.round(solution.targetY)} mm`;
+      updateLegStatus(solution, targets);
+      syncLegLimitReadouts();
+      return { solution, targets };
+    }
+
+    function updateLegPreview(solution) {
+      const originX = 200;
+      const originY = 50;
+      const scale = 1;
+      const point = (x, y) => `${(originX + x * scale).toFixed(1)},${(originY + y * scale).toFixed(1)}`;
+      const knee = point(solution.kneeX, solution.kneeY);
+      const foot = point(solution.footX, solution.footY);
+      const target = point(legConfig.x, legConfig.y);
+
+      els.legReachOuter.setAttribute("r", String((LEG_LINKS.hip + LEG_LINKS.knee) * scale));
+      els.legReachInner.setAttribute("r", String(Math.abs(LEG_LINKS.hip - LEG_LINKS.knee) * scale));
+      els.legTargetLine.setAttribute("x1", String(originX));
+      els.legTargetLine.setAttribute("y1", String(originY));
+      els.legTargetLine.setAttribute("x2", target.split(",")[0]);
+      els.legTargetLine.setAttribute("y2", target.split(",")[1]);
+      els.legLinks.setAttribute("points", `${originX},${originY} ${knee} ${foot}`);
+      els.legKneePoint.setAttribute("cx", knee.split(",")[0]);
+      els.legKneePoint.setAttribute("cy", knee.split(",")[1]);
+      els.legFootPoint.setAttribute("cx", foot.split(",")[0]);
+      els.legFootPoint.setAttribute("cy", foot.split(",")[1]);
+    }
+
+    function updateLegStatus(solution, targets) {
+      if (Number(legConfig.hipId) === Number(legConfig.kneeId)) {
+        els.legStatus.textContent = "choose different IDs";
+        return;
+      }
+
+      if (!solution.reachable) {
+        els.legStatus.textContent = "target clamped";
+        return;
+      }
+
+      if (targets.hipClamped || targets.kneeClamped) {
+        els.legStatus.textContent = "servo limit";
+        return;
+      }
+
+      els.legStatus.textContent = "reachable";
+    }
+
+    async function scanServos() {
+      readLegControls();
+      const start = Math.min(legConfig.scanStart, legConfig.scanEnd);
+      const end = Math.max(legConfig.scanStart, legConfig.scanEnd);
+      els.servoScanStatus.textContent = `scanning ${start}-${end}`;
+      await send({ cmd: "servo_scan", start, end });
+    }
+
+    async function sendLegPose() {
+      const { targets } = updateLegIk();
+      const hipId = Number(legConfig.hipId);
+      const kneeId = Number(legConfig.kneeId);
+      if (!Number.isInteger(hipId) || !Number.isInteger(kneeId) || hipId < 1 || kneeId < 1) {
+        els.legStatus.textContent = "select IDs";
+        return;
+      }
+      if (hipId === kneeId) {
+        els.legStatus.textContent = "choose different IDs";
+        return;
+      }
+
+      const configured = await ensureLegServosConfigured(hipId, kneeId);
+      if (!configured) return;
+
+      servoVelocities[hipId] = 0;
+      servoVelocities[kneeId] = 0;
+      servoMotorSpeeds[hipId] = 0;
+      servoMotorSpeeds[kneeId] = 0;
+      positions[hipId] = targets.hipAngle;
+      positions[kneeId] = targets.kneeAngle;
+      renderServos();
+      await send({ cmd: "move", id: hipId, angle: targets.hipAngle, speed: 900, accel: 50 });
+      await send({ cmd: "move", id: kneeId, angle: targets.kneeAngle, speed: 900, accel: 50 });
+    }
+
+    async function ensureLegServosConfigured(hipId, kneeId) {
+      const missingIds = [...new Set([hipId, kneeId])]
+        .filter((id) => !servos.some((servo) => Number(servo.id) === Number(id)));
+      if (missingIds.length > Math.max(0, 12 - servos.length)) {
+        els.legStatus.textContent = "servo list full";
+        return false;
+      }
+
+      let changed = false;
+      changed = ensureLegServoConfigured(hipId, "Leg hip") || changed;
+      changed = ensureLegServoConfigured(kneeId, "Leg knee") || changed;
+
+      const hipReady = servos.some((servo) => Number(servo.id) === Number(hipId));
+      const kneeReady = servos.some((servo) => Number(servo.id) === Number(kneeId));
+      if (!hipReady || !kneeReady) {
+        els.legStatus.textContent = "servo list full";
+        return false;
+      }
+
+      if (!changed) return true;
+      renderServos();
+      populateLegServoOptions();
+      await send({ cmd: "config_set", servos: normalizedServos() });
+      return true;
+    }
+
+    function ensureLegServoConfigured(id, name) {
+      const existing = servos.find((servo) => Number(servo.id) === Number(id));
+      if (existing) {
+        if (!existing.enabled) {
+          existing.enabled = true;
+          return true;
+        }
+        return false;
+      }
+
+      if (servos.length >= 12) {
+        els.legStatus.textContent = "servo list full";
+        return false;
+      }
+
+      servos.push({
+        id: Number(id),
+        name,
+        min: 0,
+        max: 360,
+        home: 180,
+        invert: false,
+        enabled: true,
+        last: Number(positions[id] ?? 180),
+        monitor: true,
+        monitorInterval: 250
+      });
+      positions[id] = Number(positions[id] ?? 180);
+      measuredPositions[id] = measuredPositions[id] ?? null;
+      servoVelocities[id] = 0;
+      servoMotorSpeeds[id] = 0;
+      return true;
+    }
+
+    function sendLegPoseThrottled() {
+      if (!legConfig.liveMove) return;
+      const now = performance.now();
+      if (legSendInFlight || now - lastLegSendAt < 160) return;
+      lastLegSendAt = now;
+      legSendInFlight = true;
+      sendLegPose().finally(() => {
+        legSendInFlight = false;
+      });
+    }
+
+    function handleLegTargetInput() {
+      updateLegIk();
+      sendLegPoseThrottled();
+    }
+
+    function clampInt(value, min, max, fallback) {
+      const next = Number.parseInt(value, 10);
+      if (!Number.isInteger(next)) return fallback;
+      return clamp(next, min, max);
+    }
+
+    function radToDeg(value) {
+      return value * 180 / Math.PI;
+    }
+
+    function formatAngle(value) {
+      return Number(value).toFixed(1);
+    }
+
+    function renderServos() {
+      saveLocalServos();
+      els.servoGrid.innerHTML = "";
+
+      if (!servos.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "No servos saved yet.";
+        els.servoGrid.appendChild(empty);
+        return;
+      }
+
+      for (const servo of servos) {
+        const angle = Number(positions[servo.id] ?? servo.last ?? servo.home);
+        const measured = measuredPositions[servo.id];
+        const measuredText = Number.isFinite(Number(measured)) ? `${Math.round(Number(measured))} deg` : "--";
+        const controlMode = servoControlModes[servo.id] || (servo.motorMode ? "motor" : servo.controlMode || "position");
+        const velocity = Number(servoVelocities[servo.id] ?? servo.velocity ?? 0);
+        const velocityText = `${Math.round(velocity)} deg/s`;
+        const motorSpeed = Number(servoMotorSpeeds[servo.id] ?? servo.motorSpeed ?? 0);
+        const motorSpeedText = `${Math.round(motorSpeed * 100)}%`;
+        const card = document.createElement("article");
+        card.className = "servo-card";
+        card.innerHTML = `
+          <div class="servo-head">
+            <div>
+              <h3>${escapeHtml(servo.name || `Servo ${servo.id}`)}</h3>
+              <p class="subtle">ID ${servo.id}</p>
+            </div>
+            <div class="servo-angle">${Math.round(angle)} deg</div>
+          </div>
+          <div class="servo-readout">
+            <div class="readout-box">
+              <span>Commanded</span>
+              <strong class="commanded-value">${Math.round(angle)} deg</strong>
+            </div>
+            <div class="readout-box">
+              <span>Reported</span>
+              <strong class="measured-value">${measuredText}</strong>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="control-mode-toggle">${modeLabel(controlMode)}</button>
+            <button class="motion-stop danger">Stop Motion</button>
+          </div>
+          <div class="control-surface position-control ${controlMode !== "position" ? "hidden" : ""}">
+            <div class="range-head"><span>Angle</span><strong>${Math.round(angle)} deg</strong></div>
+            <input class="angle" type="range" min="${servo.min}" max="${servo.max}" step="1" value="${angle}">
+          </div>
+          <div class="control-surface velocity-control ${controlMode !== "velocity" ? "hidden" : ""}">
+            <div class="range-head"><span>Joint velocity</span><strong class="velocity-value">${velocityText}</strong></div>
+            <input class="velocity" type="range" min="-180" max="180" step="5" value="${Math.round(velocity)}">
+          </div>
+          <div class="control-surface motor-control ${controlMode !== "motor" ? "hidden" : ""}">
+            <div class="range-head"><span>Motor speed</span><strong class="motor-speed-value">${motorSpeedText}</strong></div>
+            <input class="servo-motor-speed" type="range" min="-100" max="100" step="2" value="${Math.round(motorSpeed * 100)}">
+          </div>
+          <div class="toolbar">
+            <button class="home">Home</button>
+            <button class="read">Read</button>
+            <button class="remove icon" title="Remove servo">x</button>
+          </div>
+        `;
+
+        const angleInput = card.querySelector(".angle");
+        const velocityInput = card.querySelector(".velocity");
+        const motorInput = card.querySelector(".servo-motor-speed");
+        const modeButton = card.querySelector(".control-mode-toggle");
+        angleInput.addEventListener("input", () => {
+          positions[servo.id] = Number(angleInput.value);
+          card.querySelector(".servo-angle").textContent = `${Math.round(positions[servo.id])} deg`;
+          card.querySelector(".commanded-value").textContent = `${Math.round(positions[servo.id])} deg`;
+          card.querySelector(".position-control strong").textContent = `${Math.round(positions[servo.id])} deg`;
+        });
+        angleInput.addEventListener("change", () => sendMove(servo.id, Number(angleInput.value)));
+        velocityInput.addEventListener("input", () => {
+          const next = Number(velocityInput.value);
+          servoVelocities[servo.id] = next;
+          card.querySelector(".velocity-value").textContent = `${Math.round(next)} deg/s`;
+          sendVelocityThrottled(servo.id, next);
+        });
+        velocityInput.addEventListener("change", () => sendVelocity(servo.id, Number(velocityInput.value)));
+        motorInput.addEventListener("input", () => {
+          const next = Number(motorInput.value) / 100;
+          servoMotorSpeeds[servo.id] = next;
+          card.querySelector(".motor-speed-value").textContent = `${Math.round(next * 100)}%`;
+          sendServoMotorThrottled(servo.id, next);
+        });
+        motorInput.addEventListener("change", () => sendServoMotor(servo.id, Number(motorInput.value) / 100));
+        modeButton.addEventListener("click", () => {
+          const nextMode = nextControlMode(controlMode);
+          servoControlModes[servo.id] = nextMode;
+          if (nextMode === "position" || nextMode === "velocity") {
+            servoMotorSpeeds[servo.id] = 0;
+            send({ cmd: "servo_motor_stop", id: servo.id });
+            send({ cmd: "servo_mode", id: servo.id, mode: "servo" });
+          }
+          if (nextMode === "position") sendVelocity(servo.id, 0);
+          if (nextMode === "motor") {
+            servoVelocities[servo.id] = 0;
+            send({ cmd: "servo_velocity_stop", id: servo.id });
+            send({ cmd: "servo_mode", id: servo.id, mode: "motor" });
+          }
+          renderServos();
+        });
+        card.querySelector(".motion-stop").addEventListener("click", () => {
+          servoVelocities[servo.id] = 0;
+          servoMotorSpeeds[servo.id] = 0;
+          renderServos();
+          send({ cmd: "servo_velocity_stop", id: servo.id });
+          send({ cmd: "servo_motor_stop", id: servo.id });
+        });
+        card.querySelector(".home").addEventListener("click", () => {
+          servoVelocities[servo.id] = 0;
+          servoMotorSpeeds[servo.id] = 0;
+          positions[servo.id] = servo.home;
+          renderServos();
+          send({ cmd: "home", id: servo.id });
+        });
+        card.querySelector(".read").addEventListener("click", () => send({ cmd: "read", id: servo.id }));
+        card.querySelector(".remove").addEventListener("click", () => {
+          servos = servos.filter((item) => item !== servo);
+          delete positions[servo.id];
+          delete measuredPositions[servo.id];
+          delete servoVelocities[servo.id];
+          delete servoMotorSpeeds[servo.id];
+          delete servoControlModes[servo.id];
+          renderServos();
+          populateLegServoOptions();
+          updateLegIk();
+        });
+
+        els.servoGrid.appendChild(card);
+      }
+    }
+
+    function renderMotors() {
+      els.motorGrid.innerHTML = "";
+      for (const motor of motors) {
+        const card = document.createElement("article");
+        card.className = "servo-card";
+        card.innerHTML = `
+          <div class="servo-head">
+            <div>
+              <h3>Motor ${escapeHtml(motor.id)}</h3>
+              <p class="subtle">TB6612 channel ${escapeHtml(motor.id)}</p>
+            </div>
+            <div class="servo-angle">${Math.round(Number(motor.speed) * 100)}%</div>
+          </div>
+          <input class="motor-speed" type="range" min="-100" max="100" step="1" value="${Math.round(Number(motor.speed) * 100)}">
+          <div class="field-grid">
+            <label>Limit<input class="motor-limit" type="number" min="0" max="1" step="0.05" value="${Number(motor.limit ?? 0.35)}"></label>
+          </div>
+          <div class="toolbar">
+            <button class="motor-reverse">Reverse</button>
+            <button class="motor-stop danger">Stop</button>
+            <button class="motor-forward">Forward</button>
+          </div>
+        `;
+
+        const speedInput = card.querySelector(".motor-speed");
+        const limitInput = card.querySelector(".motor-limit");
+        speedInput.addEventListener("input", () => {
+          card.querySelector(".servo-angle").textContent = `${speedInput.value}%`;
+        });
+        speedInput.addEventListener("change", () => {
+          motor.speed = Number(speedInput.value) / 100;
+          motor.limit = Number(limitInput.value);
+          sendMotor(motor);
+        });
+        limitInput.addEventListener("change", () => {
+          motor.limit = Number(limitInput.value);
+          sendMotor(motor);
+        });
+        card.querySelector(".motor-reverse").addEventListener("click", () => {
+          motor.speed = -Number(motor.limit ?? 0.35);
+          renderMotors();
+          sendMotor(motor);
+        });
+        card.querySelector(".motor-forward").addEventListener("click", () => {
+          motor.speed = Number(motor.limit ?? 0.35);
+          renderMotors();
+          sendMotor(motor);
+        });
+        card.querySelector(".motor-stop").addEventListener("click", () => {
+          motor.speed = 0;
+          renderMotors();
+          sendMotor(motor);
+        });
+
+        els.motorGrid.appendChild(card);
+      }
+    }
+
+    async function connect() {
+      if (!("serial" in navigator)) {
+        els.lastMessage.textContent = "Use Chrome or Edge for Web Serial.";
+        return;
+      }
+
+      if (transport === "wifi") disconnectWifi();
+
+      if (port) {
+        await disconnect();
+        return;
+      }
+
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      const textEncoder = new TextEncoderStream();
+      textEncoder.readable.pipeTo(port.writable);
+      writer = textEncoder.writable.getWriter();
+
+      const textDecoder = new TextDecoderStream();
+      port.readable.pipeTo(textDecoder.writable);
+      reader = textDecoder.readable.getReader();
+
+      transport = "serial";
+      setConnected(true, "serial");
+      readLoop();
+      await send({ cmd: "hello" });
+    }
+
+    async function disconnect() {
+      try { await reader?.cancel(); } catch {}
+      try { writer?.releaseLock(); } catch {}
+      try { await port?.close(); } catch {}
+      reader = undefined;
+      writer = undefined;
+      port = undefined;
+      if (transport === "serial") transport = null;
+      setConnected(false);
+    }
+
+    async function connectWifi() {
+      if (transport === "wifi") {
+        disconnectWifi();
+        return;
+      }
+
+      if (port) await disconnect();
+
+      const baseUrl = normalizeBaseUrl(els.wifiUrl.value);
+      els.wifiUrl.value = baseUrl;
+      localStorage.setItem("robotDogWifiUrl", baseUrl);
+
+      try {
+        const response = await fetch(`${baseUrl}/api/messages?after=0`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Wi-Fi HTTP ${response.status}`);
+        const data = await response.json();
+        wifiAfter = Number(data.seq || 0);
+      } catch (error) {
+        els.lastMessage.textContent = `Wi-Fi connect failed: ${error.message}`;
+        logLine(error.message);
+        return;
+      }
+
+      wifiBaseUrl = baseUrl;
+      transport = "wifi";
+      setConnected(true, "wifi");
+      startWifiPolling();
+      await send({ cmd: "hello" });
+      await send({ cmd: "wifi_status" });
+    }
+
+    function disconnectWifi() {
+      if (wifiPollTimer) clearInterval(wifiPollTimer);
+      wifiPollTimer = undefined;
+      wifiPollInFlight = false;
+      wifiBaseUrl = "";
+      if (transport === "wifi") transport = null;
+      setConnected(false);
+    }
+
+    function startWifiPolling() {
+      if (wifiPollTimer) clearInterval(wifiPollTimer);
+      wifiPollTimer = setInterval(() => {
+        pollWifi().catch((error) => {
+          els.lastMessage.textContent = `Wi-Fi read failed: ${error.message}`;
+          logLine(error.message);
+          disconnectWifi();
+        });
+      }, 250);
+      pollWifi().catch((error) => logLine(error.message));
+    }
+
+    async function pollWifi() {
+      if (transport !== "wifi" || wifiPollInFlight || !wifiBaseUrl) return;
+      wifiPollInFlight = true;
+      try {
+        const response = await fetch(`${wifiBaseUrl}/api/messages?after=${wifiAfter}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Wi-Fi HTTP ${response.status}`);
+        const data = await response.json();
+        for (const line of data.lines || []) handleLine(line);
+        wifiAfter = Number(data.seq ?? wifiAfter);
+      } finally {
+        wifiPollInFlight = false;
+      }
+    }
+
+    async function readLoop() {
+      try {
+        while (port && reader) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          readBuffer += value;
+          let index;
+          while ((index = readBuffer.indexOf("\n")) >= 0) {
+            const line = readBuffer.slice(0, index).trim();
+            readBuffer = readBuffer.slice(index + 1);
+            if (line) handleLine(line);
+          }
+        }
+      } catch (error) {
+        logLine(error.message);
+      } finally {
+        if (transport === "serial") {
+          transport = null;
+          setConnected(false);
+        }
+      }
+    }
+
+    function handleLine(line) {
+      logLine(line, "rx");
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        return;
+      }
+
+      if (message.type === "hello") {
+        els.boardVersion.textContent = `firmware ${message.version}`;
+        updateWifi(message);
+        if (Array.isArray(message.servos)) updateServosFromBoard(message.servos);
+        if (message.imu) updateImu({ type: "imu", ...message.imu });
+        if (Array.isArray(message.motors)) {
+          motors = message.motors.map((motor) => ({
+            id: String(motor.id),
+            speed: Number(motor.speed || 0),
+            limit: Number(motor.limit ?? 0.35)
+          }));
+          renderMotors();
+        }
+      } else if (message.type === "config") {
+        updateServosFromBoard(message.servos);
+      } else if (message.type === "state") {
+        updateWifi(message);
+        positions = { ...positions, ...(message.positions || {}) };
+        servoVelocities = { ...servoVelocities, ...(message.velocities || {}) };
+        servoMotorSpeeds = { ...servoMotorSpeeds, ...(message.motorSpeeds || {}) };
+        if (message.motorModes) {
+          for (const [id, isMotor] of Object.entries(message.motorModes)) {
+            if (isMotor) servoControlModes[id] = "motor";
+          }
+        }
+        mergeMeasuredFromState(message.measured || {}, Boolean(message.setup));
+        renderServos();
+        syncLegLimitReadouts();
+      } else if (message.type === "imu") {
+        updateImu(message);
+      } else if (message.type === "motors") {
+        if (Array.isArray(message.motors)) {
+          motors = message.motors.map((motor) => ({
+            id: String(motor.id),
+            speed: Number(motor.speed || 0),
+            limit: Number(motor.limit ?? 0.35)
+          }));
+          renderMotors();
+        }
+      } else if (message.type === "servo_ping") {
+        logServoId(`${message.ok ? "found" : "no reply"}: ID ${message.current}`);
+      } else if (message.type === "servo_scan") {
+        availableServoIds = (message.found || [])
+          .map(Number)
+          .filter((id) => Number.isInteger(id) && id >= 1 && id <= 253)
+          .sort((a, b) => a - b);
+        saveAvailableServoIds();
+        populateLegServoOptions();
+        updateServoScanStatus();
+        updateLegIk();
+        logServoId(`scan ${message.start}-${message.end}: ${(message.found || []).join(", ") || "none"}`);
+      } else if (message.type === "servo_set_id") {
+        const stage = message.ok ? "ok" : String(message.stage || "unknown");
+        logServoId(`${message.ok ? "programmed" : `failed at ${stage}`}: ID ${message.current} -> ${message.next}`);
+        if (pendingServoProgram && Number(message.current) === pendingServoProgram.current && Number(message.next) === pendingServoProgram.next) {
+          if (message.ok) {
+            const nextId = pendingServoProgram.next;
+            const nextName = pendingServoProgram.name;
+            activeSetupId = nextId;
+            localStorage.setItem("robotDogActiveSetupId", String(nextId));
+            setTimeout(() => {
+              logServoId(`wiggling new ID ${nextId}`);
+              send({ cmd: "servo_identify", id: nextId, amplitude: 12, speed: 700, accel: 40 });
+            }, 150);
+            upsertIdentifiedServo(nextId, nextName);
+            prepareAddServoPanel();
+            els.addServoPanel.classList.add("hidden");
+          }
+          pendingServoProgram = null;
+        }
+      } else if (message.type === "servo_identify") {
+        activeSetupId = Number(message.id);
+        localStorage.setItem("robotDogActiveSetupId", String(activeSetupId));
+        logServoId(`${message.ok ? "moving" : "failed"}: ID ${message.id}`);
+      } else if (message.type === "error") {
+        els.lastMessage.textContent = message.message;
+      } else if (message.type === "ok") {
+        els.lastMessage.textContent = `${message.cmd} ok`;
+      }
+    }
+
+    function updateWifi(message) {
+      const connected = Boolean(message.wifi ?? message.connected);
+      els.wifiStatus.textContent = connected ? `Wi-Fi ${message.ip || "connected"}` : "Wi-Fi offline";
+    }
+
+    function updateServosFromBoard(nextServos) {
+      const previousModes = { ...servoControlModes };
+      const previousVelocities = { ...servoVelocities };
+      const previousMotorSpeeds = { ...servoMotorSpeeds };
+      servos = nextServos.map((servo) => ({
+        id: Number(servo.id),
+        name: servo.name || `Servo ${servo.id}`,
+        min: Number(servo.min),
+        max: Number(servo.max),
+        home: Number(servo.home),
+        invert: Boolean(servo.invert),
+        enabled: Boolean(servo.enabled),
+        last: Number(servo.last ?? servo.home),
+        measured: Number.isFinite(Number(servo.measured)) ? Number(servo.measured) : null,
+        velocity: Number(servo.velocity ?? 0),
+        motorMode: Boolean(servo.motorMode),
+        motorSpeed: Number(servo.motorSpeed ?? 0),
+        monitor: servo.monitor !== false,
+        monitorInterval: Number(servo.monitorInterval ?? 250)
+      }));
+      positions = Object.fromEntries(servos.map((servo) => [servo.id, servo.last]));
+      measuredPositions = Object.fromEntries(servos.map((servo) => [servo.id, servo.measured]));
+      servoVelocities = Object.fromEntries(servos.map((servo) => [servo.id, Number(previousVelocities[servo.id] ?? servo.velocity ?? 0)]));
+      servoMotorSpeeds = Object.fromEntries(servos.map((servo) => [servo.id, Number(previousMotorSpeeds[servo.id] ?? servo.motorSpeed ?? 0)]));
+      servoControlModes = Object.fromEntries(servos.map((servo) => [servo.id, previousModes[servo.id] || (servo.motorMode ? "motor" : "position")]));
+      renderServos();
+      if (els.addServoPanel.classList.contains("hidden")) populateServoOptions();
+      populateLegServoOptions();
+      syncLegLimitControls();
+      updateLegIk();
+    }
+
+    function logServoId(text) {
+      const time = new Date().toLocaleTimeString();
+      els.servoIdLog.textContent = `${time}  ${text}\n${els.servoIdLog.textContent}`.split("\n").slice(0, 8).join("\n");
+    }
+
+    function updateImu(message) {
+      imuMonitorEnabled = message.monitor !== false;
+      els.imuToggleButton.textContent = imuMonitorEnabled ? "Pause Monitor" : "Start Monitor";
+      els.imuInterval.value = Number(message.interval ?? els.imuInterval.value);
+      els.imuStatus.textContent = message.available ? "online" : "offline";
+      els.imuRoll.textContent = Number.isFinite(Number(message.roll)) ? `${Number(message.roll).toFixed(1)} deg` : "--";
+      els.imuPitch.textContent = Number.isFinite(Number(message.pitch)) ? `${Number(message.pitch).toFixed(1)} deg` : "--";
+      els.imuYaw.textContent = Number.isFinite(Number(message.yaw)) ? `${Number(message.yaw).toFixed(1)} deg` : "--";
+
+      if (message.available && Number.isFinite(Number(message.roll)) && Number.isFinite(Number(message.pitch))) {
+        const accel = message.accel || {};
+        const gyro = message.gyro || {};
+        const line = `${new Date().toLocaleTimeString()}  R ${Number(message.roll).toFixed(1)}  P ${Number(message.pitch).toFixed(1)}  Y ${Number(message.yaw).toFixed(1)}  A ${Number(accel.x || 0).toFixed(2)},${Number(accel.y || 0).toFixed(2)},${Number(accel.z || 0).toFixed(2)}  G ${Number(gyro.x || 0).toFixed(2)},${Number(gyro.y || 0).toFixed(2)},${Number(gyro.z || 0).toFixed(2)}`;
+        imuLogLines = [...imuLogLines, line].slice(-12);
+        els.imuLog.textContent = imuLogLines.join("\n");
+        els.imuLog.scrollTop = els.imuLog.scrollHeight;
+      }
+    }
+
+    async function send(payload) {
+      const line = JSON.stringify(payload);
+
+      try {
+        if (transport === "wifi") {
+          if (!wifiBaseUrl) {
+            els.lastMessage.textContent = "Connect Wi-Fi first.";
+            return;
+          }
+          const response = await fetch(`${wifiBaseUrl}/api/command`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: line
+          });
+          if (!response.ok) throw new Error(`Wi-Fi HTTP ${response.status}`);
+          logLine(line, "tx");
+          return;
+        }
+
+        if (!writer) {
+          els.lastMessage.textContent = "Connect Wi-Fi or USB first.";
+          return;
+        }
+        await writer.write(`${line}\n`);
+        logLine(line, "tx");
+      } catch (error) {
+        els.lastMessage.textContent = error.message;
+        logLine(error.message);
+      }
+    }
+
+    function sendMove(id, angle) {
+      servoVelocities[id] = 0;
+      send({ cmd: "move", id, angle, speed: 900, accel: 50 });
+    }
+
+    function sendVelocity(id, dps) {
+      const next = clamp(Number(dps), -720, 720);
+      servoVelocities[id] = next;
+      send({ cmd: "servo_velocity", id, dps: next });
+    }
+
+    function sendVelocityThrottled(id, dps) {
+      const now = performance.now();
+      if (now - Number(lastVelocitySendAt[id] || 0) < 120) return;
+      lastVelocitySendAt[id] = now;
+      sendVelocity(id, dps);
+    }
+
+    function sendServoMotor(id, speed) {
+      const next = clamp(Number(speed), -1, 1);
+      servoMotorSpeeds[id] = next;
+      send({ cmd: "servo_motor_set", id, speed: next, accel: 40 });
+    }
+
+    function sendServoMotorThrottled(id, speed) {
+      const now = performance.now();
+      if (now - Number(lastMotorSendAt[id] || 0) < 120) return;
+      lastMotorSendAt[id] = now;
+      sendServoMotor(id, speed);
+    }
+
+    function sendMotor(motor) {
+      send({ cmd: "motor_set", id: motor.id, speed: Number(motor.speed), limit: Number(motor.limit ?? 0.35) });
+    }
+
+    function nextAvailableServoId() {
+      const used = new Set(servos.map((servo) => Number(servo.id)));
+      for (let id = 1; id <= 253; id += 1) {
+        if (!used.has(id)) return id;
+      }
+      return Math.max(1, ...used);
+    }
+
+    function upsertIdentifiedServo(id, name) {
+      const nextName = name.trim() || `Servo ${id}`;
+      const existing = servos.find((servo) => Number(servo.id) === Number(id));
+      if (existing) {
+        existing.name = nextName;
+        existing.enabled = true;
+      } else {
+        servos.push({
+          id: Number(id),
+          name: nextName,
+          min: 0,
+          max: 360,
+          home: 180,
+          invert: false,
+          enabled: true,
+          last: Number(positions[id] ?? 180),
+          monitor: true,
+          monitorInterval: 250
+        });
+      }
+
+      positions[id] = Number(positions[id] ?? 180);
+      measuredPositions[id] = measuredPositions[id] ?? null;
+      servoVelocities[id] = 0;
+      servoMotorSpeeds[id] = 0;
+      renderServos();
+      populateLegServoOptions();
+      updateLegIk();
+      send({ cmd: "config_set", servos: normalizedServos() });
+    }
+
+    async function findMovingServo() {
+      const currentId = clamp(Number(els.servoCurrentId.value || 1), 1, 253);
+      const nextId = clamp(Number(els.servoNextId.value || currentId), 1, 253);
+      const nextName = selectedServoName();
+      activeSetupId = nextId;
+      localStorage.setItem("robotDogActiveSetupId", String(activeSetupId));
+
+      if (currentId !== nextId) {
+        pendingServoProgram = { current: currentId, next: nextId, name: nextName };
+        logServoId(`programming ${nextName}: ID ${currentId} -> ${nextId}`);
+        await send({ cmd: "servo_set_id", current: currentId, next: nextId });
+        return;
+      }
+
+      upsertIdentifiedServo(nextId, nextName);
+      prepareAddServoPanel();
+      els.addServoPanel.classList.add("hidden");
+      logServoId(`added ${nextName}: ID ${nextId}`);
+      await send({ cmd: "servo_identify", id: nextId, amplitude: 12, speed: 700, accel: 40 });
+    }
+
+    function nextControlMode(mode) {
+      if (mode === "position") return "velocity";
+      if (mode === "velocity") return "motor";
+      return "position";
+    }
+
+    function modeLabel(mode) {
+      if (mode === "velocity") return "Joint Velocity Mode";
+      if (mode === "motor") return "Motor Mode";
+      return "Position Mode";
+    }
+
+    function normalizedServos() {
+      return servos.map((servo) => ({
+        id: Number(servo.id),
+        name: servo.name,
+        min: Number(servo.min),
+        max: Number(servo.max),
+        home: Number(servo.home),
+        invert: Boolean(servo.invert),
+        enabled: Boolean(servo.enabled),
+        monitor: servo.monitor !== false,
+        monitorInterval: Number(servo.monitorInterval ?? 250)
+      }));
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+
+    els.connectButton.addEventListener("click", () => connect().catch((error) => logLine(error.message)));
+    els.wifiConnectButton.addEventListener("click", () => connectWifi().catch((error) => logLine(error.message)));
+    els.addServoButton.addEventListener("click", () => {
+      prepareAddServoPanel();
+      els.addServoPanel.classList.remove("hidden");
+    });
+    els.addServoCloseButton.addEventListener("click", () => els.addServoPanel.classList.add("hidden"));
+    els.servoFindButton.addEventListener("click", () => {
+      findMovingServo().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logServoId(error.message);
+      });
+    });
+    els.servoScanButton.addEventListener("click", () => {
+      scanServos().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logServoId(error.message);
+      });
+    });
+    els.limitSetupStartButton.addEventListener("click", () => {
+      startLimitSetup().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logLine(error.message);
+      });
+    });
+    els.limitConfirmMinButton.addEventListener("click", () => confirmLimitEndpoint("min"));
+    els.limitConfirmMaxButton.addEventListener("click", () => confirmLimitEndpoint("max"));
+    els.limitServoJogButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const rawDelta = button.dataset.delta;
+        const delta = rawDelta === "tick" ? SERVO_TICK_DEGREES : rawDelta === "-tick" ? -SERVO_TICK_DEGREES : Number(rawDelta);
+        jogLimitServo(delta).catch((error) => {
+          els.lastMessage.textContent = error.message;
+          logLine(error.message);
+        });
+      });
+    });
+    els.legSaveLimitsButton.addEventListener("click", () => {
+      saveLegLimits().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logLine(error.message);
+      });
+    });
+    els.legSendButton.addEventListener("click", () => {
+      sendLegPose().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logLine(error.message);
+      });
+    });
+    els.legXRange.addEventListener("input", () => {
+      els.legXInput.value = els.legXRange.value;
+      handleLegTargetInput();
+    });
+    els.legYRange.addEventListener("input", () => {
+      els.legYInput.value = els.legYRange.value;
+      handleLegTargetInput();
+    });
+    els.legXInput.addEventListener("input", () => {
+      els.legXRange.value = els.legXInput.value;
+      handleLegTargetInput();
+    });
+    els.legYInput.addEventListener("input", () => {
+      els.legYRange.value = els.legYInput.value;
+      handleLegTargetInput();
+    });
+    els.limitServoTorque.addEventListener("change", () => {
+      setupTorqueLimit();
+    });
+    [
+      els.legHipServo,
+      els.legKneeServo,
+      els.limitServoSelect,
+      els.legLiveMove,
+      els.servoScanStart,
+      els.servoScanEnd,
+      els.legBend,
+      els.legKneeCompensation,
+      els.legHipZero,
+      els.legHipDirection,
+      els.legHipTrim,
+      els.legKneeZero,
+      els.legKneeDirection,
+      els.legKneeTrim
+    ].forEach((control) => {
+      control.addEventListener("change", () => {
+        updateLegIk();
+        if (control === els.legHipServo || control === els.legKneeServo || control === els.limitServoSelect) {
+          syncLegLimitControls();
+        }
+        sendLegPoseThrottled();
+      });
+    });
+    els.homeAllButton.addEventListener("click", () => {
+      servoVelocities = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
+      servoMotorSpeeds = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
+      send({ cmd: "servo_motor_stop", all: true });
+      send({ cmd: "servo_mode", all: true, mode: "servo" });
+      send({ cmd: "home", all: true });
+    });
+    els.stopButton.addEventListener("click", () => {
+      servoVelocities = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
+      servoMotorSpeeds = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
+      send({ cmd: "stop" });
+      send({ cmd: "servo_velocity_stop", all: true });
+      send({ cmd: "servo_motor_stop", all: true });
+      send({ cmd: "motor_stop" });
+    });
+    els.imuToggleButton.addEventListener("click", () => {
+      imuMonitorEnabled = !imuMonitorEnabled;
+      send({ cmd: "imu_monitor_set", enabled: imuMonitorEnabled, interval: Number(els.imuInterval.value) });
+      els.imuToggleButton.textContent = imuMonitorEnabled ? "Pause Monitor" : "Start Monitor";
+    });
+    els.imuReadButton.addEventListener("click", () => send({ cmd: "imu_status" }));
+    els.imuInterval.addEventListener("change", () => {
+      send({ cmd: "imu_monitor_set", enabled: imuMonitorEnabled, interval: Number(els.imuInterval.value) });
+    });
+    els.motorStopButton.addEventListener("click", () => {
+      motors = motors.map((motor) => ({ ...motor, speed: 0 }));
+      renderMotors();
+      send({ cmd: "motor_stop" });
+    });
+    els.capturePoseButton.addEventListener("click", () => {
+      const program = JSON.parse(els.programText.value);
+      program.steps.push({
+        ms: 500,
+        poses: Object.fromEntries(servos.map((servo) => [String(servo.id), Number(positions[servo.id] ?? servo.home)]))
+      });
+      els.programText.value = JSON.stringify(program, null, 2);
+    });
+    els.playButton.addEventListener("click", () => {
+      try {
+        const program = JSON.parse(els.programText.value);
+        send({ cmd: "play", ...program });
+      } catch (error) {
+        els.lastMessage.textContent = error.message;
+      }
+    });
+
+    prepareAddServoPanel();
+    if (activeSetupId) els.servoNextId.value = activeSetupId;
+    renderServos();
+    renderMotors();
+    setConnected(false);
+
+    if ((location.protocol === "http:" || location.protocol === "https:") && location.hostname) {
+      connectWifi().catch((error) => logLine(error.message));
+    }
+  </script>
+</body>
+</html>

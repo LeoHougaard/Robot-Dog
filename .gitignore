@@ -1,0 +1,10 @@
+.pio/
+.pioenvs/
+.piolibdeps/
+
+.vscode/
+
+*.log
+
+.DS_Store
+Thumbs.db
