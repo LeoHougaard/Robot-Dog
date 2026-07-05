@@ -998,12 +998,12 @@
     const WALK_LEGS = [
       { key: "lf", name: "Left front", pair: 0, sideSign: 1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 1, femur: 2, knee: 3 } },
       { key: "rb", name: "Right back", pair: 0, sideSign: -1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 4, femur: 5, knee: 6 } },
-      { key: "rf", name: "Right front", pair: 1, sideSign: -1, defaultFold: 1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
-      { key: "lb", name: "Left back", pair: 1, sideSign: 1, defaultFold: -1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
+      { key: "rf", name: "Right front", pair: 1, sideSign: -1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
+      { key: "lb", name: "Left back", pair: 1, sideSign: 1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
     ];
 
     const DEFAULT_WALK_CONFIG = {
-      configVersion: 3,
+      configVersion: 4,
       stepHeight: 0,
       cycleSeconds: 3,
       stepX: 0,
@@ -1255,7 +1255,7 @@
         next.configVersion = defaults.configVersion;
         for (const leg of WALK_LEGS) {
           const savedLeg = { ...defaults.legs[leg.key], ...(saved.legs?.[leg.key] || {}) };
-          if (savedVersion < 3) {
+          if (savedVersion < 4) {
             savedLeg.hipDir = defaults.legs[leg.key].hipDir;
             savedLeg.femurDir = defaults.legs[leg.key].femurDir;
             savedLeg.kneeDir = defaults.legs[leg.key].kneeDir;
