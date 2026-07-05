@@ -220,6 +220,30 @@ public:
     writePacket(id, 0x03, params, sizeof(params));
   }
 
+  void syncMoveTo(const uint8_t *ids, const uint16_t *positions, uint8_t count, uint16_t speed, uint8_t accel) {
+    if (!bus || !ids || !positions || count == 0) return;
+    if (count > MAX_SERVOS) count = MAX_SERVOS;
+
+    uint8_t params[2 + (8 * MAX_SERVOS)];
+    uint8_t offset = 0;
+    params[offset++] = STS_ACC_ADDR;
+    params[offset++] = 7;
+
+    for (uint8_t i = 0; i < count; i++) {
+      params[offset++] = ids[i];
+      params[offset++] = accel;
+      params[offset++] = lowByte(positions[i]);
+      params[offset++] = highByte(positions[i]);
+      params[offset++] = 0x00;
+      params[offset++] = 0x00;
+      params[offset++] = lowByte(speed);
+      params[offset++] = highByte(speed);
+    }
+
+    clearRx();
+    writePacket(0xFE, 0x83, params, offset);
+  }
+
   bool readPosition(uint8_t id, uint16_t &position) {
     if (!bus) return false;
 
@@ -1574,10 +1598,26 @@ void runProgram() {
   if (!programPlaying || millis() < nextProgramAt) return;
 
   ProgramStep &step = programSteps[currentStep];
+  uint8_t ids[MAX_SERVOS];
+  uint16_t positions[MAX_SERVOS];
+  uint8_t moveCount = 0;
+
   for (uint8_t i = 0; i < servoCount; i++) {
-    if (step.hasPose[i]) moveServo(servos[i].id, step.pose[i], step.speed, step.accel);
+    if (!step.hasPose[i] || !servos[i].enabled) continue;
+
+    ServoConfig &servo = servos[i];
+    servo.velocityDps = 0;
+    servo.lastVelocityAt = 0;
+    ensureServoMode(servo);
+
+    float clamped = clampAngle(servo, step.pose[i]);
+    servo.lastAngle = clamped;
+    ids[moveCount] = servo.id;
+    positions[moveCount] = angleToBusPosition(servo, clamped);
+    moveCount++;
   }
 
+  servoBus.syncMoveTo(ids, positions, moveCount, step.speed, step.accel);
   nextProgramAt = millis() + step.durationMs;
   currentStep++;
   if (currentStep >= programStepCount) {
