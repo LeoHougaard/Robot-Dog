@@ -469,6 +469,64 @@
       min-width: 0;
     }
 
+    .walk-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    .walk-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.1fr);
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+
+    .walk-controls, .walk-leg-card {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .walk-readout {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .walk-leg-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .walk-leg-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfdfd;
+    }
+
+    .walk-leg-card h3 {
+      line-height: 1.2;
+    }
+
+    .walk-leg-fields {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .walk-trim-fields {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+
     .limit-flow {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -584,6 +642,18 @@
       }
 
       .leg-grid, .leg-field-grid, .leg-readout {
+        grid-template-columns: 1fr;
+      }
+
+      .walk-grid, .walk-readout, .walk-leg-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .walk-leg-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .walk-trim-fields {
         grid-template-columns: 1fr;
       }
 
@@ -782,6 +852,51 @@
         </div>
       </section>
 
+      <section class="panel walk-panel">
+        <div class="servo-head">
+          <h2>Whole Robot Walk Test</h2>
+          <div class="toolbar">
+            <span id="walkStatus" class="pill">height 0</span>
+            <button id="walkRegisterButton">Register IDs</button>
+            <button id="walkNeutralButton">Set Neutral</button>
+            <button id="walkStartButton" class="primary">Start Walk</button>
+            <button id="walkStopButton" class="danger">Stop Walk</button>
+          </div>
+        </div>
+        <div class="walk-grid">
+          <div class="walk-controls">
+            <label>Walk target<select id="walkTargetSelect">
+              <option value="all">All legs</option>
+              <option value="lf">Left front only</option>
+              <option value="rb">Right back only</option>
+              <option value="rf">Right front only</option>
+              <option value="lb">Left back only</option>
+            </select></label>
+            <div class="control-surface">
+              <div class="range-head"><span>Step height</span><strong id="walkHeightValue">0 mm</strong></div>
+              <input id="walkHeightRange" type="range" min="0" max="50" step="1" value="0">
+            </div>
+            <div class="control-surface">
+              <div class="range-head"><span>Cycle time</span><strong id="walkCycleValue">3.0 s</strong></div>
+              <input id="walkCycleRange" type="range" min="0.1" max="10" step="0.1" value="3">
+            </div>
+            <div class="control-surface">
+              <div class="range-head"><span>Step length</span><strong id="walkStepXValue">0 mm</strong></div>
+              <input id="walkStepXRange" type="range" min="-80" max="80" step="1" value="0">
+            </div>
+            <div class="control-surface">
+              <div class="range-head"><span>Turn bias</span><strong id="walkStepYValue">0 mm</strong></div>
+              <input id="walkStepYRange" type="range" min="-80" max="80" step="1" value="0">
+            </div>
+            <div class="walk-readout">
+              <div class="readout-box"><span>Pair A</span><strong>1,2,3 + 4,5,6</strong></div>
+              <div class="readout-box"><span>Pair B</span><strong>7,8,9 + 10,11,12</strong></div>
+            </div>
+          </div>
+          <div id="walkLegGrid" class="walk-leg-grid"></div>
+        </div>
+      </section>
+
       <section>
         <div id="servoGrid" class="grid"></div>
       </section>
@@ -842,8 +957,18 @@
 
   <script>
     const DEFAULT_SERVOS = [
-      { id: 1, name: "Front left test", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: true, monitorInterval: 250 },
-      { id: 2, name: "Front right test", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: true, monitorInterval: 250 }
+      { id: 1, name: "Left front hip swing", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 2, name: "Left front femur", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 3, name: "Left front knee", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 4, name: "Right back hip swing", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 5, name: "Right back femur", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 6, name: "Right back knee", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 7, name: "Right front hip swing", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 8, name: "Right front femur", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 9, name: "Right front knee", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 10, name: "Left back hip swing", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 11, name: "Left back femur", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 },
+      { id: 12, name: "Left back knee", min: 0, max: 360, home: 180, invert: false, enabled: true, last: 180, monitor: false, monitorInterval: 250 }
     ];
 
     const DEFAULT_PROGRAM = {
@@ -860,6 +985,35 @@
       knee: 100.7
     };
     const SERVO_TICK_DEGREES = 360 / 4095;
+
+    const WALK_DIMENSIONS = {
+      hipInset: 21,
+      hipDrop: 25,
+      femur: 90,
+      lower: 115,
+      neutralJointDeg: 45,
+      hipSwingLimitDeg: 35
+    };
+
+    const WALK_LEGS = [
+      { key: "lf", name: "Left front", pair: 0, sideSign: 1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 1, femur: 2, knee: 3 } },
+      { key: "rb", name: "Right back", pair: 0, sideSign: -1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 4, femur: 5, knee: 6 } },
+      { key: "rf", name: "Right front", pair: 1, sideSign: -1, defaultFold: 1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
+      { key: "lb", name: "Left back", pair: 1, sideSign: 1, defaultFold: -1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
+    ];
+
+    const DEFAULT_WALK_CONFIG = {
+      configVersion: 3,
+      stepHeight: 0,
+      cycleSeconds: 3,
+      stepX: 0,
+      stepY: 0,
+      target: "all",
+      legs: Object.fromEntries(WALK_LEGS.map((leg) => [
+        leg.key,
+        { hipDir: leg.defaultServoDir, femurDir: leg.defaultServoDir, kneeDir: leg.defaultServoDir, stepDir: leg.defaultStepDir, fold: leg.defaultFold, hipTrim: 0, femurTrim: 0, kneeTrim: 0 }
+      ]))
+    };
 
     const DEFAULT_LEG_CONFIG = {
       hipId: 1,
@@ -881,14 +1035,18 @@
     };
 
     const JOINT_OPTIONS = [
-      "Front left hip",
-      "Front left knee",
-      "Front right hip",
-      "Front right knee",
-      "Back left hip",
-      "Back left knee",
-      "Back right hip",
-      "Back right knee",
+      "Left front hip swing",
+      "Left front femur",
+      "Left front knee",
+      "Right back hip swing",
+      "Right back femur",
+      "Right back knee",
+      "Right front hip swing",
+      "Right front femur",
+      "Right front knee",
+      "Left back hip swing",
+      "Left back femur",
+      "Left back knee",
       "Neck",
       "Tail",
       "Test servo"
@@ -903,6 +1061,7 @@
     let wifiAfter = 0;
     let wifiPollTimer;
     let wifiPollInFlight = false;
+    let boardConfigFresh = false;
     let servos = loadLocalServos();
     let positions = Object.fromEntries(servos.map((servo) => [servo.id, servo.last ?? servo.home]));
     let measuredPositions = Object.fromEntries(servos.map((servo) => [servo.id, servo.measured ?? null]));
@@ -911,6 +1070,11 @@
     let servoControlModes = {};
     let availableServoIds = loadAvailableServoIds();
     let legConfig = loadLegConfig();
+    let walkConfig = loadWalkConfig();
+    let walkRunning = false;
+    let walkUpdateTimer;
+    let walkCommandToken = 0;
+    let pendingCommandAcks = [];
     let limitSetup = { id: null, step: "idle", min: null, max: null };
     let lastLegSendAt = 0;
     let legSendInFlight = false;
@@ -993,6 +1157,21 @@
       legStatus: document.querySelector("#legStatus"),
       legFootReadout: document.querySelector("#legFootReadout"),
       legSendButton: document.querySelector("#legSendButton"),
+      walkStatus: document.querySelector("#walkStatus"),
+      walkRegisterButton: document.querySelector("#walkRegisterButton"),
+      walkNeutralButton: document.querySelector("#walkNeutralButton"),
+      walkStartButton: document.querySelector("#walkStartButton"),
+      walkStopButton: document.querySelector("#walkStopButton"),
+      walkTargetSelect: document.querySelector("#walkTargetSelect"),
+      walkHeightRange: document.querySelector("#walkHeightRange"),
+      walkCycleRange: document.querySelector("#walkCycleRange"),
+      walkStepXRange: document.querySelector("#walkStepXRange"),
+      walkStepYRange: document.querySelector("#walkStepYRange"),
+      walkHeightValue: document.querySelector("#walkHeightValue"),
+      walkCycleValue: document.querySelector("#walkCycleValue"),
+      walkStepXValue: document.querySelector("#walkStepXValue"),
+      walkStepYValue: document.querySelector("#walkStepYValue"),
+      walkLegGrid: document.querySelector("#walkLegGrid"),
       homeAllButton: document.querySelector("#homeAllButton"),
       stopButton: document.querySelector("#stopButton"),
       imuToggleButton: document.querySelector("#imuToggleButton"),
@@ -1015,6 +1194,7 @@
     els.wifiUrl.value = defaultWifiUrl();
     populateServoOptions();
     populateLegControls();
+    populateWalkControls();
 
     function loadLocalServos() {
       try {
@@ -1051,6 +1231,66 @@
 
     function saveLegConfig() {
       localStorage.setItem("robotDogLegIk", JSON.stringify(legConfig));
+    }
+
+    function defaultWalkConfig() {
+      return {
+        ...DEFAULT_WALK_CONFIG,
+        legs: Object.fromEntries(WALK_LEGS.map((leg) => [
+          leg.key,
+          { ...DEFAULT_WALK_CONFIG.legs[leg.key] }
+        ]))
+      };
+    }
+
+    function loadWalkConfig() {
+      const defaults = defaultWalkConfig();
+      try {
+        const saved = JSON.parse(localStorage.getItem("robotDogWalkTest")) || {};
+        const savedVersion = Number(saved.configVersion || 0);
+        const next = { ...defaults, ...saved, legs: { ...defaults.legs } };
+        if (savedVersion < 2 && Number(saved.stepX) === 30) {
+          next.stepX = defaults.stepX;
+        }
+        next.configVersion = defaults.configVersion;
+        for (const leg of WALK_LEGS) {
+          const savedLeg = { ...defaults.legs[leg.key], ...(saved.legs?.[leg.key] || {}) };
+          if (savedVersion < 3) {
+            savedLeg.hipDir = defaults.legs[leg.key].hipDir;
+            savedLeg.femurDir = defaults.legs[leg.key].femurDir;
+            savedLeg.kneeDir = defaults.legs[leg.key].kneeDir;
+            savedLeg.stepDir = defaults.legs[leg.key].stepDir;
+          }
+          next.legs[leg.key] = normalizeWalkLegSetting(savedLeg, leg);
+        }
+        return next;
+      } catch {
+        return defaults;
+      }
+    }
+
+    function saveWalkConfig() {
+      localStorage.setItem("robotDogWalkTest", JSON.stringify(walkConfig));
+    }
+
+    function normalizeWalkLegSetting(setting, leg) {
+      const fold = Number(setting.fold);
+      return {
+        hipDir: normalizeSign(setting.hipDir, leg.defaultServoDir),
+        femurDir: normalizeSign(setting.femurDir, leg.defaultServoDir),
+        kneeDir: normalizeSign(setting.kneeDir, leg.defaultServoDir),
+        stepDir: normalizeSign(setting.stepDir, leg.defaultStepDir),
+        fold: fold === 1 || fold === -1 ? fold : leg.defaultFold,
+        hipTrim: clamp(Number(setting.hipTrim || 0), -5, 5),
+        femurTrim: clamp(Number(setting.femurTrim || 0), -5, 5),
+        kneeTrim: clamp(Number(setting.kneeTrim || 0), -5, 5)
+      };
+    }
+
+    function normalizeSign(value, fallback = 1) {
+      const next = Number(value);
+      if (next === 1 || next === -1) return next;
+      return fallback === -1 ? -1 : 1;
     }
 
     function populateServoOptions() {
@@ -1139,6 +1379,115 @@
       syncLegLimitControls();
       updateServoScanStatus();
       updateLegIk();
+    }
+
+    function populateWalkControls() {
+      renderWalkLegControls();
+      syncWalkControlValues();
+      updateWalkStatus();
+    }
+
+    function renderWalkLegControls() {
+      els.walkLegGrid.innerHTML = WALK_LEGS.map((leg) => {
+        const setting = normalizeWalkLegSetting(walkConfig.legs?.[leg.key] || {}, leg);
+        walkConfig.legs[leg.key] = setting;
+        return `
+          <article class="walk-leg-card" data-leg="${escapeAttr(leg.key)}">
+            <div>
+              <h3>${escapeHtml(leg.name)}</h3>
+              <p class="subtle">IDs ${leg.ids.hip}, ${leg.ids.femur}, ${leg.ids.knee}</p>
+            </div>
+            <div class="walk-leg-fields">
+              <label>Hip dir<select class="walk-leg-setting" data-field="hipDir">
+                <option value="1"${setting.hipDir === 1 ? " selected" : ""}>+</option>
+                <option value="-1"${setting.hipDir === -1 ? " selected" : ""}>-</option>
+              </select></label>
+              <label>Femur dir<select class="walk-leg-setting" data-field="femurDir">
+                <option value="1"${setting.femurDir === 1 ? " selected" : ""}>+</option>
+                <option value="-1"${setting.femurDir === -1 ? " selected" : ""}>-</option>
+              </select></label>
+              <label>Knee dir<select class="walk-leg-setting" data-field="kneeDir">
+                <option value="1"${setting.kneeDir === 1 ? " selected" : ""}>+</option>
+                <option value="-1"${setting.kneeDir === -1 ? " selected" : ""}>-</option>
+              </select></label>
+              <label>Step dir<select class="walk-leg-setting" data-field="stepDir">
+                <option value="1"${setting.stepDir === 1 ? " selected" : ""}>+</option>
+                <option value="-1"${setting.stepDir === -1 ? " selected" : ""}>-</option>
+              </select></label>
+              <label>Fold<select class="walk-leg-setting" data-field="fold">
+                <option value="1"${setting.fold === 1 ? " selected" : ""}>&gt;</option>
+                <option value="-1"${setting.fold === -1 ? " selected" : ""}>&lt;</option>
+              </select></label>
+            </div>
+            <div class="walk-trim-fields">
+              <label>Hip center<input class="walk-leg-setting" data-field="hipTrim" type="number" min="-5" max="5" step="0.5" value="${Number(setting.hipTrim).toFixed(1)}"></label>
+              <label>Femur center<input class="walk-leg-setting" data-field="femurTrim" type="number" min="-5" max="5" step="0.5" value="${Number(setting.femurTrim).toFixed(1)}"></label>
+              <label>Knee center<input class="walk-leg-setting" data-field="kneeTrim" type="number" min="-5" max="5" step="0.5" value="${Number(setting.kneeTrim).toFixed(1)}"></label>
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      els.walkLegGrid.querySelectorAll(".walk-leg-setting").forEach((control) => {
+        control.addEventListener("change", () => {
+          readWalkControls();
+          if (walkRunning) queueWalkProgramUpdate();
+        });
+      });
+    }
+
+    function readWalkControls() {
+      walkConfig.target = validWalkTarget(els.walkTargetSelect.value);
+      walkConfig.stepHeight = clamp(Number(els.walkHeightRange.value || 0), 0, 50);
+      walkConfig.cycleSeconds = clamp(Number(els.walkCycleRange.value || 3), 0.1, 10);
+      walkConfig.stepX = clamp(Number(els.walkStepXRange.value || 0), -80, 80);
+      walkConfig.stepY = clamp(Number(els.walkStepYRange.value || 0), -80, 80);
+      for (const leg of WALK_LEGS) {
+        const card = els.walkLegGrid.querySelector(`[data-leg="${leg.key}"]`);
+        const current = normalizeWalkLegSetting(walkConfig.legs?.[leg.key] || {}, leg);
+        if (card) {
+          for (const control of card.querySelectorAll(".walk-leg-setting")) {
+            current[control.dataset.field] = Number(control.value);
+          }
+        }
+        walkConfig.legs[leg.key] = normalizeWalkLegSetting(current, leg);
+      }
+      saveWalkConfig();
+      syncWalkControlValues();
+    }
+
+    function syncWalkControlValues() {
+      els.walkTargetSelect.value = validWalkTarget(walkConfig.target);
+      els.walkHeightRange.value = walkConfig.stepHeight;
+      els.walkCycleRange.value = walkConfig.cycleSeconds;
+      els.walkStepXRange.value = walkConfig.stepX;
+      els.walkStepYRange.value = walkConfig.stepY;
+      els.walkHeightValue.textContent = `${Math.round(walkConfig.stepHeight)} mm`;
+      els.walkCycleValue.textContent = `${Number(walkConfig.cycleSeconds).toFixed(1)} s`;
+      els.walkStepXValue.textContent = `${Math.round(walkConfig.stepX)} mm`;
+      els.walkStepYValue.textContent = `${Math.round(walkConfig.stepY)} mm`;
+    }
+
+    function updateWalkStatus(text) {
+      if (text) {
+        els.walkStatus.textContent = text;
+        return;
+      }
+      els.walkStatus.textContent = walkRunning
+        ? `walking ${walkTargetLabel()}`
+        : walkConfig.stepHeight <= 0
+          ? "height 0"
+          : `${walkTargetLabel()} ready`;
+    }
+
+    function validWalkTarget(value) {
+      return value === "all" || WALK_LEGS.some((leg) => leg.key === value) ? value : "all";
+    }
+
+    function walkTargetLabel() {
+      const target = validWalkTarget(walkConfig.target);
+      if (target === "all") return "all legs";
+      return WALK_LEGS.find((leg) => leg.key === target)?.name || "one leg";
     }
 
     function populateLegServoOptions() {
@@ -1771,10 +2120,386 @@
       sendLegPoseThrottled();
     }
 
+    function walkRequiredServoIds() {
+      return activeWalkLegs().flatMap((leg) => [leg.ids.hip, leg.ids.femur, leg.ids.knee]);
+    }
+
+    function activeWalkLegs() {
+      const target = validWalkTarget(walkConfig.target);
+      if (target === "all") return WALK_LEGS;
+      return WALK_LEGS.filter((leg) => leg.key === target);
+    }
+
+    function walkLegSetting(leg) {
+      const setting = normalizeWalkLegSetting(walkConfig.legs?.[leg.key] || {}, leg);
+      walkConfig.legs[leg.key] = setting;
+      return setting;
+    }
+
+    function hasCommandTransport() {
+      return transport === "wifi" ? Boolean(wifiBaseUrl) : Boolean(writer);
+    }
+
+    function walkServoDefaults() {
+      const roles = ["hip", "femur", "knee"];
+      const labels = { hip: "hip swing", femur: "femur", knee: "knee" };
+      const defaults = [];
+      for (const leg of WALK_LEGS) {
+        for (const role of roles) {
+          defaults.push({
+            id: leg.ids[role],
+            name: `${leg.name} ${labels[role]}`,
+            min: 0,
+            max: 360,
+            home: 180,
+            invert: false,
+            enabled: true,
+            last: 180,
+            monitor: false,
+            monitorInterval: 250
+          });
+        }
+      }
+      return defaults;
+    }
+
+    async function registerWalkServos() {
+      readWalkControls();
+      if (!hasCommandTransport()) {
+        updateWalkStatus("connect first");
+        return false;
+      }
+
+      if (!boardConfigFresh) {
+        updateWalkStatus("waiting config");
+        return false;
+      }
+
+      const additions = walkServoDefaults().filter((servo) => !servoById(servo.id));
+      if (!additions.length) {
+        updateWalkStatus("IDs ready");
+        return true;
+      }
+
+      if (servos.length + additions.length > 12) {
+        updateWalkStatus("servo list full");
+        return false;
+      }
+
+      servos = [...servos, ...additions].sort((a, b) => Number(a.id) - Number(b.id));
+      for (const servo of additions) {
+        positions[servo.id] = servo.last;
+        measuredPositions[servo.id] = null;
+        servoVelocities[servo.id] = 0;
+        servoMotorSpeeds[servo.id] = 0;
+      }
+
+      saveLocalServos();
+      populateServoOptions();
+      populateLegServoOptions();
+      syncLegLimitControls();
+      renderServos();
+      await sendAndWait({ cmd: "config_set", servos: normalizedServos() });
+      updateWalkStatus(`registered ${additions.map((servo) => servo.id).join(",")}`);
+      return true;
+    }
+
+    function ensureWalkServosReady() {
+      if (!hasCommandTransport()) {
+        updateWalkStatus("connect first");
+        return false;
+      }
+
+      if (!boardConfigFresh) {
+        updateWalkStatus("waiting config");
+        return false;
+      }
+
+      const requiredIds = walkRequiredServoIds();
+      const missingIds = requiredIds.filter((id) => !servos.some((servo) => Number(servo.id) === Number(id)));
+      if (missingIds.length) {
+        updateWalkStatus(`missing IDs ${missingIds.slice(0, 4).join(", ")}${missingIds.length > 4 ? "..." : ""}`);
+        return false;
+      }
+
+      const disabledIds = requiredIds.filter((id) => {
+        const servo = servos.find((item) => Number(item.id) === Number(id));
+        return servo && servo.enabled === false;
+      });
+      if (disabledIds.length) {
+        updateWalkStatus(`disabled IDs ${disabledIds.slice(0, 4).join(", ")}${disabledIds.length > 4 ? "..." : ""}`);
+        return false;
+      }
+
+      return true;
+    }
+
+    function walkServoHome(id) {
+      const servo = servos.find((item) => Number(item.id) === Number(id));
+      return Number(servo?.home ?? 180);
+    }
+
+    function walkServoCenter(leg, role) {
+      const setting = walkLegSetting(leg);
+      const trimKey = `${role}Trim`;
+      return walkServoHome(leg.ids[role]) + Number(setting[trimKey] || 0);
+    }
+
+    function walkNeutralPose() {
+      const poses = {};
+      for (const leg of activeWalkLegs()) {
+        poses[String(leg.ids.hip)] = Number(walkServoCenter(leg, "hip").toFixed(1));
+        poses[String(leg.ids.femur)] = Number(walkServoCenter(leg, "femur").toFixed(1));
+        poses[String(leg.ids.knee)] = Number(walkServoCenter(leg, "knee").toFixed(1));
+      }
+      return poses;
+    }
+
+    async function sendWalkNeutral(keepCommandToken = false, commandToken = walkCommandToken) {
+      if (!keepCommandToken) commandToken = ++walkCommandToken;
+      readWalkControls();
+      if (!ensureWalkServosReady()) return false;
+      walkRunning = false;
+      if (walkUpdateTimer) clearTimeout(walkUpdateTimer);
+      walkUpdateTimer = undefined;
+      const poses = walkNeutralPose();
+      for (const [id, angle] of Object.entries(poses)) positions[id] = angle;
+      renderServos();
+      if (commandToken !== walkCommandToken) return false;
+      await sendAndWait({ cmd: "stop" });
+      if (commandToken !== walkCommandToken) return false;
+      await sendAndWait({ cmd: "play", loop: false, steps: [{ ms: 600, poses, speed: 180, accel: 30 }] });
+      if (commandToken !== walkCommandToken) return false;
+      updateWalkStatus("neutral");
+      return true;
+    }
+
+    async function startWalkTest() {
+      const commandToken = ++walkCommandToken;
+      readWalkControls();
+      if (!ensureWalkServosReady()) return;
+      if (!(await sendWalkNeutral(true, commandToken))) return;
+      if (commandToken !== walkCommandToken) return;
+      if (walkConfig.stepHeight <= 0) {
+        updateWalkStatus("height 0");
+        return;
+      }
+
+      await sleep(650);
+      if (commandToken !== walkCommandToken) return;
+      walkRunning = true;
+      await sendWalkProgram(commandToken);
+    }
+
+    async function stopWalkTest() {
+      walkCommandToken++;
+      walkRunning = false;
+      if (walkUpdateTimer) clearTimeout(walkUpdateTimer);
+      walkUpdateTimer = undefined;
+      await sendAndWait({ cmd: "stop" });
+      updateWalkStatus("stopped");
+    }
+
+    function queueWalkProgramUpdate() {
+      if (!walkRunning) return;
+      if (walkUpdateTimer) clearTimeout(walkUpdateTimer);
+      const commandToken = walkCommandToken;
+      walkUpdateTimer = setTimeout(() => {
+        walkUpdateTimer = undefined;
+        if (commandToken !== walkCommandToken || !walkRunning) return;
+        sendWalkProgram(commandToken).catch((error) => {
+          updateWalkStatus("walk error");
+          logLine(error.message);
+        });
+      }, 220);
+    }
+
+    async function sendWalkProgram(commandToken = walkCommandToken) {
+      readWalkControls();
+      if (commandToken !== walkCommandToken || !ensureWalkServosReady()) return false;
+      if (walkConfig.stepHeight <= 0) {
+        walkRunning = false;
+        await sendWalkNeutral(true, commandToken);
+        updateWalkStatus("height 0");
+        return false;
+      }
+
+      const program = buildWalkProgram();
+      const firstPose = program.steps[0]?.poses || {};
+      for (const [id, angle] of Object.entries(firstPose)) positions[id] = angle;
+      renderServos();
+      if (commandToken !== walkCommandToken) return false;
+      await sendAndWait({ cmd: "play", ...program });
+      if (commandToken !== walkCommandToken) return false;
+      updateWalkStatus(program.speedLimited ? "speed limited" : program.clamped ? "walking limit" : undefined);
+      return true;
+    }
+
+    function buildWalkProgram() {
+      const cycleMs = Math.round(walkConfig.cycleSeconds * 1000);
+      const frameCount = clamp(Math.floor(cycleMs / 35), 5, 24);
+      const stepMs = Math.max(20, Math.round(cycleMs / frameCount));
+      const steps = [];
+      let clamped = false;
+      let speedLimited = false;
+
+      for (let frame = 0; frame < frameCount; frame++) {
+        const phase = frame / frameCount;
+        const pose = buildWalkPose(phase);
+        clamped = pose.clamped || clamped;
+        steps.push({ ms: stepMs, poses: pose.poses });
+      }
+
+      for (let i = 0; i < steps.length; i++) {
+        const previous = steps[(i + steps.length - 1) % steps.length].poses;
+        const timing = walkStepTiming(previous, steps[i].poses, stepMs);
+        steps[i].speed = timing.speed;
+        steps[i].accel = timing.accel;
+        speedLimited = speedLimited || timing.limited;
+      }
+
+      return { loop: true, steps, clamped, speedLimited };
+    }
+
+    function walkStepTiming(previousPose, nextPose, stepMs) {
+      let maxDelta = 0;
+      for (const [id, angle] of Object.entries(nextPose)) {
+        const previous = Number(previousPose[id] ?? angle);
+        maxDelta = Math.max(maxDelta, Math.abs(Number(angle) - previous));
+      }
+
+      const seconds = Math.max(0.02, stepMs / 1000);
+      const dps = maxDelta / seconds;
+      const rawSpeed = Math.round(dps * 4095 / 360);
+      const speed = clamp(rawSpeed, 20, 1800);
+      return {
+        speed,
+        accel: clamp(Math.round(speed / 30), 8, 80),
+        limited: rawSpeed > speed
+      };
+    }
+
+    function buildWalkPose(cyclePhase) {
+      const poses = {};
+      let clamped = false;
+      const pairTiming = validWalkTarget(walkConfig.target) === "all";
+      for (const leg of activeWalkLegs()) {
+        const phase = pairTiming ? (cyclePhase + leg.pair * 0.5) % 1 : cyclePhase;
+        const result = walkLegPose(leg, phase);
+        Object.assign(poses, result.poses);
+        clamped = result.clamped || clamped;
+      }
+      return { poses, clamped };
+    }
+
+    function walkLegPose(leg, phase) {
+      const setting = walkLegSetting(leg);
+      const path = walkFootPath(phase);
+      const neutral = walkNeutralFoot(setting.fold);
+      const strideMm = path.strideFactor * setting.stepDir * (walkConfig.stepX + leg.sideSign * walkConfig.stepY);
+      const targetX = neutral.x + strideMm;
+      const targetZ = neutral.z + path.lift;
+      const localX = targetX;
+      const localZ = targetZ - WALK_DIMENSIONS.hipDrop;
+      const solution = solveWalkLegIk(localX, localZ, setting.fold);
+
+      const neutralFemur = setting.fold * WALK_DIMENSIONS.neutralJointDeg;
+      const neutralLower = -setting.fold * WALK_DIMENSIONS.neutralJointDeg;
+      const hipRaw = walkServoCenter(leg, "hip");
+      const femurRaw = walkServoCenter(leg, "femur") + setting.femurDir * (solution.femurFromDown - neutralFemur);
+      const kneeRaw = walkServoCenter(leg, "knee") + setting.kneeDir * (solution.lowerFromDown - neutralLower);
+      const hip = limitServoTarget(leg.ids.hip, hipRaw);
+      const femur = limitServoTarget(leg.ids.femur, femurRaw);
+      const knee = limitServoTarget(leg.ids.knee, kneeRaw);
+
+      return {
+        clamped: hip.clamped || femur.clamped || knee.clamped || !solution.reachable,
+        poses: {
+          [String(leg.ids.hip)]: Number(hip.angle.toFixed(1)),
+          [String(leg.ids.femur)]: Number(femur.angle.toFixed(1)),
+          [String(leg.ids.knee)]: Number(knee.angle.toFixed(1))
+        }
+      };
+    }
+
+    function walkFootPath(phase) {
+      const p = ((phase % 1) + 1) % 1;
+      if (p < 0.5) {
+        const q = p * 2;
+        return {
+          strideFactor: -0.5 * Math.cos(Math.PI * q),
+          lift: walkConfig.stepHeight * Math.sin(Math.PI * q)
+        };
+      }
+
+      const q = (p - 0.5) * 2;
+      return {
+        strideFactor: 0.5 * Math.cos(Math.PI * q),
+        lift: 0
+      };
+    }
+
+    function walkNeutralFoot(fold) {
+      const femurRad = degToRad(fold * WALK_DIMENSIONS.neutralJointDeg);
+      const lowerRad = degToRad(-fold * WALK_DIMENSIONS.neutralJointDeg);
+      return {
+        x: WALK_DIMENSIONS.femur * Math.sin(femurRad) + WALK_DIMENSIONS.lower * Math.sin(lowerRad),
+        z: WALK_DIMENSIONS.hipDrop + WALK_DIMENSIONS.femur * Math.cos(femurRad) + WALK_DIMENSIONS.lower * Math.cos(lowerRad)
+      };
+    }
+
+    function solveWalkLegIk(x, z, bendSign) {
+      const upper = WALK_DIMENSIONS.femur;
+      const lower = WALK_DIMENSIONS.lower;
+      const minReach = Math.abs(upper - lower) + 0.001;
+      const maxReach = upper + lower - 0.001;
+      const rawDistance = Math.hypot(x, z);
+      let targetX = x;
+      let targetZ = z;
+      let distance = rawDistance;
+      let reachable = rawDistance >= minReach && rawDistance <= maxReach;
+
+      if (distance > maxReach) {
+        const scale = maxReach / distance;
+        targetX *= scale;
+        targetZ *= scale;
+        distance = maxReach;
+      } else if (distance < minReach) {
+        if (distance < 0.001) {
+          targetX = 0;
+          targetZ = minReach;
+        } else {
+          const scale = minReach / distance;
+          targetX *= scale;
+          targetZ *= scale;
+        }
+        distance = minReach;
+      }
+
+      const kneeCos = clamp((distance * distance - upper * upper - lower * lower) / (2 * upper * lower), -1, 1);
+      const kneeRad = bendSign * Math.acos(kneeCos);
+      const femurFromX = Math.atan2(targetZ, targetX) - Math.atan2(lower * Math.sin(kneeRad), upper + lower * Math.cos(kneeRad));
+      const lowerFromX = femurFromX + kneeRad;
+
+      return {
+        reachable,
+        femurFromDown: 90 - radToDeg(femurFromX),
+        lowerFromDown: 90 - radToDeg(lowerFromX)
+      };
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     function clampInt(value, min, max, fallback) {
       const next = Number.parseInt(value, 10);
       if (!Number.isInteger(next)) return fallback;
       return clamp(next, min, max);
+    }
+
+    function degToRad(value) {
+      return value * Math.PI / 180;
     }
 
     function radToDeg(value) {
@@ -1992,6 +2717,7 @@
         return;
       }
 
+      boardConfigFresh = false;
       port = await navigator.serial.requestPort();
       await port.open({ baudRate: 115200 });
       const textEncoder = new TextEncoderStream();
@@ -2015,6 +2741,7 @@
       reader = undefined;
       writer = undefined;
       port = undefined;
+      boardConfigFresh = false;
       if (transport === "serial") transport = null;
       setConnected(false);
     }
@@ -2030,6 +2757,7 @@
       const baseUrl = normalizeBaseUrl(els.wifiUrl.value);
       els.wifiUrl.value = baseUrl;
       localStorage.setItem("robotDogWifiUrl", baseUrl);
+      boardConfigFresh = false;
 
       try {
         const response = await fetch(`${baseUrl}/api/messages?after=0`, { cache: "no-store" });
@@ -2055,6 +2783,7 @@
       wifiPollTimer = undefined;
       wifiPollInFlight = false;
       wifiBaseUrl = "";
+      boardConfigFresh = false;
       if (transport === "wifi") transport = null;
       setConnected(false);
     }
@@ -2108,6 +2837,23 @@
       }
     }
 
+    function resolvePendingCommandAck(message) {
+      if (message.type === "ok") {
+        const index = pendingCommandAcks.findIndex((pending) => pending.cmd === message.cmd);
+        if (index < 0) return;
+        const [pending] = pendingCommandAcks.splice(index, 1);
+        clearTimeout(pending.timer);
+        pending.resolve({ ok: true, message });
+        return;
+      }
+
+      if (message.type === "error" && pendingCommandAcks.length) {
+        const pending = pendingCommandAcks.shift();
+        clearTimeout(pending.timer);
+        pending.resolve({ ok: false, message });
+      }
+    }
+
     function handleLine(line) {
       logLine(line, "rx");
       let message;
@@ -2116,6 +2862,8 @@
       } catch {
         return;
       }
+
+      resolvePendingCommandAck(message);
 
       if (message.type === "hello") {
         els.boardVersion.textContent = `firmware ${message.version}`;
@@ -2204,6 +2952,7 @@
     }
 
     function updateServosFromBoard(nextServos) {
+      boardConfigFresh = true;
       const previousModes = { ...servoControlModes };
       const previousVelocities = { ...servoVelocities };
       const previousMotorSpeeds = { ...servoMotorSpeeds };
@@ -2266,7 +3015,7 @@
         if (transport === "wifi") {
           if (!wifiBaseUrl) {
             els.lastMessage.textContent = "Connect Wi-Fi first.";
-            return;
+            return false;
           }
           const response = await fetch(`${wifiBaseUrl}/api/command`, {
             method: "POST",
@@ -2275,19 +3024,54 @@
           });
           if (!response.ok) throw new Error(`Wi-Fi HTTP ${response.status}`);
           logLine(line, "tx");
-          return;
+          return true;
         }
 
         if (!writer) {
           els.lastMessage.textContent = "Connect Wi-Fi or USB first.";
-          return;
+          return false;
         }
         await writer.write(`${line}\n`);
         logLine(line, "tx");
+        return true;
       } catch (error) {
         els.lastMessage.textContent = error.message;
         logLine(error.message);
+        return false;
       }
+    }
+
+    async function sendAndWait(payload, timeoutMs = 2500) {
+      let pending;
+      const ack = new Promise((resolve) => {
+        pending = {
+          cmd: payload.cmd,
+          resolve,
+          timer: setTimeout(() => {
+            const index = pendingCommandAcks.indexOf(pending);
+            if (index >= 0) pendingCommandAcks.splice(index, 1);
+            resolve({ ok: false, message: { message: `${payload.cmd} ack timeout` } });
+          }, timeoutMs)
+        };
+        pendingCommandAcks.push(pending);
+      });
+
+      const sent = await send(payload);
+      if (!sent) {
+        clearTimeout(pending.timer);
+        const index = pendingCommandAcks.indexOf(pending);
+        if (index >= 0) pendingCommandAcks.splice(index, 1);
+        throw new Error(`${payload.cmd} was not sent`);
+      }
+
+      const result = await ack;
+
+      if (!result.ok) {
+        const message = result.message?.message || `${payload.cmd} failed`;
+        throw new Error(message);
+      }
+
+      return true;
     }
 
     function sendMove(id, angle) {
@@ -2521,7 +3305,56 @@
         sendLegPoseThrottled();
       });
     });
+    [
+      els.walkTargetSelect,
+      els.walkHeightRange,
+      els.walkCycleRange,
+      els.walkStepXRange,
+      els.walkStepYRange
+    ].forEach((control) => {
+      control.addEventListener("input", () => {
+        readWalkControls();
+        updateWalkStatus();
+        queueWalkProgramUpdate();
+      });
+      control.addEventListener("change", () => {
+        readWalkControls();
+        updateWalkStatus();
+        queueWalkProgramUpdate();
+      });
+    });
+    els.walkRegisterButton.addEventListener("click", () => {
+      registerWalkServos().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        updateWalkStatus("register error");
+        logLine(error.message);
+      });
+    });
+    els.walkNeutralButton.addEventListener("click", () => {
+      sendWalkNeutral().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logLine(error.message);
+      });
+    });
+    els.walkStartButton.addEventListener("click", () => {
+      startWalkTest().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        updateWalkStatus("walk error");
+        logLine(error.message);
+      });
+    });
+    els.walkStopButton.addEventListener("click", () => {
+      stopWalkTest().catch((error) => {
+        els.lastMessage.textContent = error.message;
+        logLine(error.message);
+      });
+    });
     els.homeAllButton.addEventListener("click", () => {
+      walkCommandToken++;
+      walkRunning = false;
+      if (walkUpdateTimer) clearTimeout(walkUpdateTimer);
+      walkUpdateTimer = undefined;
+      updateWalkStatus();
       servoVelocities = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
       servoMotorSpeeds = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
       send({ cmd: "servo_motor_stop", all: true });
@@ -2529,6 +3362,11 @@
       send({ cmd: "home", all: true });
     });
     els.stopButton.addEventListener("click", () => {
+      walkCommandToken++;
+      walkRunning = false;
+      if (walkUpdateTimer) clearTimeout(walkUpdateTimer);
+      walkUpdateTimer = undefined;
+      updateWalkStatus("stopped");
       servoVelocities = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
       servoMotorSpeeds = Object.fromEntries(servos.map((servo) => [servo.id, 0]));
       send({ cmd: "stop" });

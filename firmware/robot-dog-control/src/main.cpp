@@ -117,6 +117,8 @@ struct ServoConfig {
 
 struct ProgramStep {
   uint16_t durationMs = 500;
+  uint16_t speed = 900;
+  uint8_t accel = 50;
   float pose[MAX_SERVOS];
   bool hasPose[MAX_SERVOS];
 };
@@ -173,6 +175,26 @@ struct ServoIdChangeResult {
   bool pingNext = false;
   bool pingCurrent = false;
   bool ok = false;
+};
+
+struct DefaultServoDef {
+  uint8_t id;
+  const char *name;
+};
+
+const DefaultServoDef DEFAULT_SERVO_DEFS[MAX_SERVOS] = {
+  {1, "Left front hip swing"},
+  {2, "Left front femur"},
+  {3, "Left front knee"},
+  {4, "Right back hip swing"},
+  {5, "Right back femur"},
+  {6, "Right back knee"},
+  {7, "Right front hip swing"},
+  {8, "Right front femur"},
+  {9, "Right front knee"},
+  {10, "Left back hip swing"},
+  {11, "Left back femur"},
+  {12, "Left back knee"}
 };
 
 class ServoBusDriver {
@@ -627,43 +649,28 @@ void sendWifiStatus() {
 }
 
 void setDefaultConfig() {
-  servoCount = 2;
+  servoCount = MAX_SERVOS;
 
-  servos[0].id = 1;
-  servos[0].name = "Front left test";
-  servos[0].minAngle = 0;
-  servos[0].maxAngle = STS_FULL_SCALE_DEGREES;
-  servos[0].homeAngle = 180;
-  servos[0].invert = false;
-  servos[0].enabled = true;
-  servos[0].lastAngle = 180;
-  servos[0].measuredAngle = 180;
-  servos[0].hasMeasuredAngle = false;
-  servos[0].monitorEnabled = true;
-  servos[0].monitorIntervalMs = DEFAULT_MONITOR_INTERVAL_MS;
-  servos[0].nextMonitorAt = 0;
-  servos[0].velocityDps = 0;
-  servos[0].lastVelocityAt = 0;
-  servos[0].motorMode = false;
-  servos[0].motorSpeed = 0;
-
-  servos[1].id = 2;
-  servos[1].name = "Front right test";
-  servos[1].minAngle = 0;
-  servos[1].maxAngle = STS_FULL_SCALE_DEGREES;
-  servos[1].homeAngle = 180;
-  servos[1].invert = false;
-  servos[1].enabled = true;
-  servos[1].lastAngle = 180;
-  servos[1].measuredAngle = 180;
-  servos[1].hasMeasuredAngle = false;
-  servos[1].monitorEnabled = true;
-  servos[1].monitorIntervalMs = DEFAULT_MONITOR_INTERVAL_MS;
-  servos[1].nextMonitorAt = 0;
-  servos[1].velocityDps = 0;
-  servos[1].lastVelocityAt = 0;
-  servos[1].motorMode = false;
-  servos[1].motorSpeed = 0;
+  for (uint8_t i = 0; i < MAX_SERVOS; i++) {
+    servos[i].id = DEFAULT_SERVO_DEFS[i].id;
+    servos[i].name = DEFAULT_SERVO_DEFS[i].name;
+    servos[i].minAngle = 0;
+    servos[i].maxAngle = STS_FULL_SCALE_DEGREES;
+    servos[i].homeAngle = 180;
+    servos[i].invert = false;
+    servos[i].enabled = true;
+    servos[i].lastAngle = 180;
+    servos[i].measuredAngle = 180;
+    servos[i].hasMeasuredAngle = false;
+    servos[i].monitorEnabled = false;
+    servos[i].monitorIntervalMs = DEFAULT_MONITOR_INTERVAL_MS;
+    servos[i].nextMonitorAt = 0;
+    servos[i].velocityDps = 0;
+    servos[i].lastVelocityAt = 0;
+    servos[i].motorMode = false;
+    servos[i].motorSpeed = 0;
+    servos[i].torqueLimit = STS_TORQUE_LIMIT_MAX;
+  }
 }
 
 void saveConfig() {
@@ -920,6 +927,8 @@ void runServoVelocities() {
 }
 
 void runServoMonitors() {
+  if (programPlaying) return;
+
   uint32_t now = millis();
   for (uint8_t i = 0; i < servoCount; i++) {
     if (!servos[i].enabled || !servos[i].monitorEnabled) continue;
@@ -1166,22 +1175,40 @@ void startProgram(JsonDocument &doc) {
   }
 
   programStepCount = 0;
+  String unusableIds;
+  bool unusableIdSeen[254] = {false};
   for (JsonObject stepDoc : doc["steps"].as<JsonArray>()) {
     if (programStepCount >= MAX_PROGRAM_STEPS) break;
     ProgramStep &step = programSteps[programStepCount];
     step.durationMs = constrain(stepDoc["ms"] | 500, 20, 10000);
+    step.speed = constrain(stepDoc["speed"] | 900, 1, 4095);
+    step.accel = constrain(stepDoc["accel"] | 50, 0, 254);
     for (uint8_t i = 0; i < MAX_SERVOS; i++) step.hasPose[i] = false;
 
     JsonObject poses = stepDoc["poses"].as<JsonObject>();
     for (JsonPair pair : poses) {
       uint8_t id = atoi(pair.key().c_str());
       ServoConfig *servo = findServo(id);
-      if (!servo) continue;
+      if (!servo || !servo->enabled) {
+        if (id < 254 && !unusableIdSeen[id]) {
+          unusableIdSeen[id] = true;
+          if (unusableIds.length() > 0) unusableIds += ",";
+          unusableIds += id;
+        }
+        continue;
+      }
       uint8_t index = servo - servos;
       step.pose[index] = pair.value().as<float>();
       step.hasPose[index] = true;
     }
     programStepCount++;
+  }
+
+  if (unusableIds.length() > 0) {
+    programStepCount = 0;
+    String message = String("program references unknown or disabled servo id(s): ") + unusableIds;
+    sendError(message.c_str());
+    return;
   }
 
   if (programStepCount == 0) {
@@ -1548,7 +1575,7 @@ void runProgram() {
 
   ProgramStep &step = programSteps[currentStep];
   for (uint8_t i = 0; i < servoCount; i++) {
-    if (step.hasPose[i]) moveServo(servos[i].id, step.pose[i], 900, 50);
+    if (step.hasPose[i]) moveServo(servos[i].id, step.pose[i], step.speed, step.accel);
   }
 
   nextProgramAt = millis() + step.durationMs;

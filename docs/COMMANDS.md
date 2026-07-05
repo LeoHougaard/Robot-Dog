@@ -251,13 +251,14 @@ Stops program playback. It does not cut servo torque, because that can make a le
   "cmd": "play",
   "loop": false,
   "steps": [
-    {"ms": 500, "poses": {"1": 90, "2": 150}},
-    {"ms": 500, "poses": {"1": 120, "2": 120}}
+    {"ms": 500, "speed": 700, "accel": 40, "poses": {"1": 90, "2": 150}},
+    {"ms": 500, "speed": 700, "accel": 40, "poses": {"1": 120, "2": 120}}
   ]
 }
 ```
 
 Loads and starts a simple pose sequence. Each step duration is in milliseconds.
+`speed` and `accel` are optional per-step servo move settings; omitted steps use `900` and `50`.
 
 `wifi_set`
 
