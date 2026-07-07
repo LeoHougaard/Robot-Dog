@@ -1000,14 +1000,14 @@
     };
 
     const WALK_LEGS = [
-      { key: "lf", name: "Left front", pair: 0, sideSign: 1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 1, femur: 2, knee: 3 } },
-      { key: "rb", name: "Right back", pair: 0, sideSign: -1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 4, femur: 5, knee: 6 } },
-      { key: "rf", name: "Right front", pair: 1, sideSign: -1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
-      { key: "lb", name: "Left back", pair: 1, sideSign: 1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
+      { key: "lf", name: "Left front", pair: 0, sideSign: 1, xSign: 1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 1, femur: 2, knee: 3 } },
+      { key: "rb", name: "Right back", pair: 0, sideSign: -1, xSign: -1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 4, femur: 5, knee: 6 } },
+      { key: "rf", name: "Right front", pair: 1, sideSign: -1, xSign: 1, defaultFold: 1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
+      { key: "lb", name: "Left back", pair: 1, sideSign: 1, xSign: -1, defaultFold: -1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
     ];
 
     const DEFAULT_WALK_CONFIG = {
-      configVersion: 5,
+      configVersion: 10,
       stepHeight: 0,
       cycleSeconds: 3,
       neutralX: -20,
@@ -1270,7 +1270,7 @@
         next.configVersion = defaults.configVersion;
         for (const leg of WALK_LEGS) {
           const savedLeg = { ...defaults.legs[leg.key], ...(saved.legs?.[leg.key] || {}) };
-          if (savedVersion < 4) {
+          if (savedVersion < 10) {
             savedLeg.hipDir = defaults.legs[leg.key].hipDir;
             savedLeg.femurDir = defaults.legs[leg.key].femurDir;
             savedLeg.kneeDir = defaults.legs[leg.key].kneeDir;
@@ -2363,11 +2363,16 @@
       }
 
       const program = buildWalkProgram();
+      if (!program.pathCheck.ok) {
+        updateWalkStatus("path check failed");
+        logLine(`walk path check failed: ${program.pathCheck.problems.join("; ")}`);
+        return false;
+      }
       const firstPose = program.steps[0]?.poses || {};
       for (const [id, angle] of Object.entries(firstPose)) positions[id] = angle;
       renderServos();
       if (commandToken !== walkCommandToken) return false;
-      await sendAndWait({ cmd: "play", ...program });
+      await sendAndWait({ cmd: "play", loop: program.loop, steps: program.steps });
       if (commandToken !== walkCommandToken) return false;
       updateWalkStatus(program.speedLimited ? "speed limited" : program.clamped ? "walking limit" : undefined);
       return true;
@@ -2396,7 +2401,7 @@
         speedLimited = speedLimited || timing.limited;
       }
 
-      return { loop: true, steps, clamped, speedLimited };
+      return { loop: true, steps, clamped, speedLimited, pathCheck: checkWalkFootPaths() };
     }
 
     function walkStepTiming(previousPose, nextPose, stepMs) {
@@ -2432,15 +2437,26 @@
 
     function walkLegPose(leg, phase) {
       const setting = walkLegSetting(leg);
+      const target = walkLegFootTarget(leg, phase, setting);
+      return walkLegTargetPose(leg, setting, target.x, target.z);
+    }
+
+    function walkLegFootTarget(leg, phase, setting = walkLegSetting(leg)) {
       const path = walkFootPath(phase);
-      const neutral = walkNeutralFoot(setting.fold);
-      const strideMm = path.strideFactor * setting.stepDir * (walkConfig.stepX + leg.sideSign * walkConfig.stepY);
-      return walkLegTargetPose(leg, setting, neutral.x + strideMm, neutral.z + path.lift);
+      const neutral = walkNeutralFoot(leg, setting.fold);
+      const strideMm = walkLegXSign(leg) * path.strideFactor * setting.stepDir * (walkConfig.stepX + leg.sideSign * walkConfig.stepY);
+      return {
+        x: neutral.x + strideMm,
+        z: neutral.z + path.lift,
+        neutral,
+        lift: path.lift,
+        strideMm
+      };
     }
 
     function walkNeutralLegPose(leg) {
       const setting = walkLegSetting(leg);
-      const neutral = walkNeutralFoot(setting.fold);
+      const neutral = walkNeutralFoot(leg, setting.fold);
       return walkLegTargetPose(leg, setting, neutral.x, neutral.z);
     }
 
@@ -2468,6 +2484,32 @@
       };
     }
 
+    function checkWalkFootPaths() {
+      const problems = [];
+      const eps = 0.001;
+      const swing = walkFootPath(0.25);
+      const stance = walkFootPath(0.75);
+      const pair0Delta = walkFootPath(0.135).strideFactor - walkFootPath(0.125).strideFactor;
+      const pair1Delta = walkFootPath(0.635).strideFactor - walkFootPath(0.625).strideFactor;
+
+      if (swing.lift <= eps) problems.push("swing lift is not positive");
+      if (Math.abs(stance.lift) > eps) problems.push("stance lift is not zero");
+      if (!(pair0Delta > eps && pair1Delta < -eps)) problems.push("diagonal cycle directions are not opposed");
+
+      for (const leg of WALK_LEGS) {
+        const setting = walkLegSetting(leg);
+        for (let i = 0; i < 16; i++) {
+          const target = walkLegFootTarget(leg, i / 16, setting);
+          if (target.z < target.neutral.z - eps) {
+            problems.push(`${leg.key} foot path is inverted`);
+            break;
+          }
+        }
+      }
+
+      return { ok: problems.length === 0, problems };
+    }
+
     function walkFootPath(phase) {
       const p = ((phase % 1) + 1) % 1;
       if (p < 0.5) {
@@ -2485,11 +2527,15 @@
       };
     }
 
-    function walkNeutralFoot(fold) {
+    function walkLegXSign(leg) {
+      return leg.xSign === -1 ? -1 : 1;
+    }
+
+    function walkNeutralFoot(leg, fold) {
       const femurRad = degToRad(fold * WALK_DIMENSIONS.neutralJointDeg);
       const lowerRad = degToRad(-fold * WALK_DIMENSIONS.neutralJointDeg);
       return {
-        x: WALK_DIMENSIONS.femur * Math.sin(femurRad) + WALK_DIMENSIONS.lower * Math.sin(lowerRad) + walkConfig.neutralX,
+        x: WALK_DIMENSIONS.femur * Math.sin(femurRad) + WALK_DIMENSIONS.lower * Math.sin(lowerRad) + walkLegXSign(leg) * walkConfig.neutralX,
         z: WALK_DIMENSIONS.hipDrop + WALK_DIMENSIONS.femur * Math.cos(femurRad) + WALK_DIMENSIONS.lower * Math.cos(lowerRad)
       };
     }
