@@ -1846,6 +1846,7 @@ void handleApiCommand() {
 }
 
 void handleWebIndex() {
+  addCorsHeaders();
   if (SPIFFS.exists("/index.html")) {
     File file = SPIFFS.open("/index.html", "r");
     webServer.streamFile(file, "text/html");

@@ -1000,10 +1000,10 @@
     };
 
     const WALK_LEGS = [
-      { key: "lf", name: "Left front", pair: 0, sideSign: 1, xSign: 1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 1, femur: 2, knee: 3 } },
-      { key: "rb", name: "Right back", pair: 0, sideSign: -1, xSign: -1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 4, femur: 5, knee: 6 } },
-      { key: "rf", name: "Right front", pair: 1, sideSign: -1, xSign: 1, defaultFold: 1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
-      { key: "lb", name: "Left back", pair: 1, sideSign: 1, xSign: -1, defaultFold: -1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
+      { key: "lf", name: "Left front", pair: 0, sideSign: 1, xSign: 1, liftSign: 1, defaultFold: 1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 1, femur: 2, knee: 3 } },
+      { key: "rb", name: "Right back", pair: 0, sideSign: -1, xSign: -1, liftSign: -1, defaultFold: -1, defaultServoDir: 1, defaultStepDir: 1, ids: { hip: 4, femur: 5, knee: 6 } },
+      { key: "rf", name: "Right front", pair: 1, sideSign: -1, xSign: 1, liftSign: 1, defaultFold: 1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 7, femur: 8, knee: 9 } },
+      { key: "lb", name: "Left back", pair: 1, sideSign: 1, xSign: -1, liftSign: -1, defaultFold: -1, defaultServoDir: -1, defaultStepDir: 1, ids: { hip: 10, femur: 11, knee: 12 } }
     ];
 
     const DEFAULT_WALK_CONFIG = {
@@ -2438,6 +2438,9 @@
     function walkLegPose(leg, phase) {
       const setting = walkLegSetting(leg);
       const target = walkLegFootTarget(leg, phase, setting);
+      if (walkLegLiftSign(leg) === -1 && target.rawLift > 0.001) {
+        return walkMirroredLiftPose(leg, setting, target);
+      }
       return walkLegTargetPose(leg, setting, target.x, target.z);
     }
 
@@ -2445,11 +2448,14 @@
       const path = walkFootPath(phase);
       const neutral = walkNeutralFoot(leg, setting.fold);
       const strideMm = walkLegXSign(leg) * path.strideFactor * setting.stepDir * (walkConfig.stepX + leg.sideSign * walkConfig.stepY);
+      const displayLiftMm = path.lift * walkLegLiftSign(leg);
       return {
         x: neutral.x + strideMm,
         z: neutral.z + path.lift,
+        displayZ: neutral.z + displayLiftMm,
         neutral,
-        lift: path.lift,
+        lift: displayLiftMm,
+        rawLift: path.lift,
         strideMm
       };
     }
@@ -2484,6 +2490,24 @@
       };
     }
 
+    function walkMirroredLiftPose(leg, setting, target) {
+      const lifted = walkLegTargetPose(leg, setting, target.x, target.z);
+      const flat = walkLegTargetPose(leg, setting, target.x, target.neutral.z);
+      const femurId = String(leg.ids.femur);
+      const kneeId = String(leg.ids.knee);
+      const femur = limitServoTarget(leg.ids.femur, 2 * flat.poses[femurId] - lifted.poses[femurId]);
+      const knee = limitServoTarget(leg.ids.knee, 2 * flat.poses[kneeId] - lifted.poses[kneeId]);
+
+      return {
+        clamped: lifted.clamped || flat.clamped || femur.clamped || knee.clamped,
+        poses: {
+          [String(leg.ids.hip)]: lifted.poses[String(leg.ids.hip)],
+          [femurId]: Number(femur.angle.toFixed(1)),
+          [kneeId]: Number(knee.angle.toFixed(1))
+        }
+      };
+    }
+
     function checkWalkFootPaths() {
       const problems = [];
       const eps = 0.001;
@@ -2498,10 +2522,26 @@
 
       for (const leg of WALK_LEGS) {
         const setting = walkLegSetting(leg);
+        const liftSign = walkLegLiftSign(leg);
+        const stance = walkLegFootTarget(leg, 0.75, setting);
+        if (Math.abs(stance.z - stance.neutral.z) > eps) {
+          problems.push(`${leg.key} stance has vertical offset`);
+          continue;
+        }
+
         for (let i = 0; i < 16; i++) {
           const target = walkLegFootTarget(leg, i / 16, setting);
-          if (target.z < target.neutral.z - eps) {
+          const verticalDelta = target.displayZ - target.neutral.z;
+          if (target.rawLift <= eps && Math.abs(verticalDelta) > eps) {
+            problems.push(`${leg.key} flat path has vertical offset`);
+            break;
+          }
+          if (target.rawLift > eps && verticalDelta * liftSign < -eps) {
             problems.push(`${leg.key} foot path is inverted`);
+            break;
+          }
+          if (Math.abs(Math.abs(verticalDelta) - target.rawLift) > eps) {
+            problems.push(`${leg.key} foot path has vertical offset`);
             break;
           }
         }
@@ -2529,6 +2569,10 @@
 
     function walkLegXSign(leg) {
       return leg.xSign === -1 ? -1 : 1;
+    }
+
+    function walkLegLiftSign(leg) {
+      return leg.liftSign === -1 ? -1 : 1;
     }
 
     function walkNeutralFoot(leg, fold) {
