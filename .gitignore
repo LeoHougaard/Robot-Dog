@@ -3,8 +3,13 @@
 .piolibdeps/
 
 .vscode/
+.venv-sim/
+__pycache__/
+*.pyc
+sim/runs/
 
 *.log
+MUJOCO_LOG.TXT
 
 .DS_Store
 Thumbs.db

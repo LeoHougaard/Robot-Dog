@@ -1,0 +1,14 @@
+name: stand
+description: First task for checking whether the robot can hold itself upright.
+robot: simple_quad_v0
+episode_seconds: 8
+control_rate_hz: 50
+objectives:
+  keep_base_upright: true
+  keep_base_height: true
+  minimize_joint_velocity: true
+  minimize_action_change: true
+termination:
+  min_base_height_m: 0.05
+  max_roll_rad: 0.8
+  max_pitch_rad: 0.8

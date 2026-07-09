@@ -1,0 +1,19 @@
+name: walk
+description: Slow commanded forward walking after stand/balance works.
+robot: simple_quad_v0
+episode_seconds: 12
+control_rate_hz: 50
+commands:
+  forward_velocity_m_s_min: 0.05
+  forward_velocity_m_s_max: 0.25
+  yaw_rate_rad_s_min: -0.4
+  yaw_rate_rad_s_max: 0.4
+objectives:
+  track_forward_velocity: true
+  keep_base_upright: true
+  reduce_slip: true
+  minimize_action_change: true
+termination:
+  min_base_height_m: 0.05
+  max_roll_rad: 0.9
+  max_pitch_rad: 0.9

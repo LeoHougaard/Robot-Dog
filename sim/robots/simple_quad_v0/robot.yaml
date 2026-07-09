@@ -1,0 +1,8 @@
+name: simple_quad_v0
+description: Simple Onshape quadruped prototype for validating the sim and RL pipeline.
+source: onshape
+urdf_package: onshape_export/assembly_1
+urdf_path: onshape_export/assembly_1/urdf/assembly_1.urdf
+mjcf_path: mjcf/simple_quad_v0.xml
+actuator_profile: st3215_hs
+status: prototype_sim_pipeline

@@ -1,0 +1,34 @@
+name: st3215_hs
+description: Approximate Waveshare ST3215-HS 20kg.cm serial bus servo profile for early simulation.
+source_notes:
+  - Published specs are enough for first-pass feasibility simulation.
+  - Continuous torque, backlash, bus latency, thermal behavior, and voltage sag should be measured later.
+units:
+  torque: Nm
+  angular_velocity: rad_per_second
+  angle: rad
+  voltage: V
+published_specs:
+  peak_torque_nm: 1.96
+  no_load_speed_rad_s: 11.1
+  encoder_counts_per_rev: 4096
+  voltage_min: 6.0
+  voltage_max: 12.6
+  locked_rotor_current_a: 2.4
+simulation_defaults:
+  torque_limit_nm: 1.37
+  velocity_limit_rad_s: 8.0
+  control_mode: position
+  command_rate_hz: 50
+  latency_ms: 20
+  position_kp: 22.0
+  position_kd: 0.8
+domain_randomization:
+  torque_scale_min: 0.7
+  torque_scale_max: 1.0
+  velocity_scale_min: 0.75
+  velocity_scale_max: 1.0
+  latency_ms_min: 15
+  latency_ms_max: 30
+  joint_friction_scale_min: 0.85
+  joint_friction_scale_max: 1.2
