@@ -84,9 +84,43 @@ def main() -> int:
     parser.add_argument("--task", default="stand", choices=["stand", "walk", "target"])
     parser.add_argument("--policy", choices=["random", "reference", "ppo"], default="random")
     parser.add_argument("--checkpoint", help="Optional Stable-Baselines3 PPO .zip checkpoint.")
+    parser.add_argument(
+        "--recovery-checkpoint",
+        help="Optional PPO checkpoint used only for tipped/flipped reset poses.",
+    )
+    parser.add_argument(
+        "--blend-checkpoint",
+        help="Optional PPO checkpoint blended with the main policy on upright resets.",
+    )
+    parser.add_argument(
+        "--blend-weight",
+        type=float,
+        default=0.0,
+        help="Action weight for --blend-checkpoint on upright resets.",
+    )
+    parser.add_argument(
+        "--terrain-checkpoint",
+        help="Optional PPO checkpoint selected on --terrain-checkpoint-surfaces.",
+    )
+    parser.add_argument(
+        "--terrain-checkpoint-surfaces",
+        default="",
+        help="Comma-separated surfaces routed to --terrain-checkpoint.",
+    )
+    parser.add_argument(
+        "--action-multiplier",
+        type=float,
+        default=1.0,
+        help="Scale policy actions before clipping and stepping the environment.",
+    )
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--max-steps", type=int, default=400)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument(
+        "--seed-blocks",
+        default="",
+        help="Optional comma-separated base seeds; --episodes are evaluated for each block.",
+    )
     parser.add_argument("--record", help="Optional .npz path for qpos/qvel/action/reward trajectory.")
     parser.add_argument("--render-rgb", help="Optional final-frame PPM path.")
     parser.add_argument("--target-velocity", type=float, help="Walking or target-directed velocity in m/s.")
@@ -98,12 +132,17 @@ def main() -> int:
     parser.add_argument("--terrain-seed", type=int, help="Terrain seed. Defaults to --seed.")
     parser.add_argument(
         "--terrain-curriculum",
-        action="store_true",
-        help="Request terrain curriculum mode from envs that support it.",
+        nargs="?",
+        const="flat,mild,rough,hard",
+        help="Comma-separated terrain curriculum requested from envs that support it.",
     )
     args = parser.parse_args()
     if args.terrain_seed is None:
         args.terrain_seed = args.seed
+    if args.terrain_curriculum:
+        args.terrain_curriculum = tuple(
+            value.strip() for value in args.terrain_curriculum.split(",") if value.strip()
+        )
 
     use_ppo = args.policy == "ppo" or args.checkpoint is not None
     if use_ppo and args.checkpoint is None:
@@ -119,6 +158,9 @@ def main() -> int:
 
     try:
         policy = load_policy(args.checkpoint) if use_ppo else None
+        recovery_policy = load_policy(args.recovery_checkpoint) if args.recovery_checkpoint else None
+        blend_policy = load_policy(args.blend_checkpoint) if args.blend_checkpoint else None
+        terrain_policy = load_policy(args.terrain_checkpoint) if args.terrain_checkpoint else None
     except ImportError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -159,11 +201,27 @@ def main() -> int:
     time_to_successes: list[float] = []
     target_distance_reductions: list[float] = []
     failure_sectors: dict[str, int] = {}
+    path_efficiencies: list[float] = []
+    terrain_counts: dict[str, int] = {}
+    reset_pose_counts: dict[str, int] = {}
+    success_pose_counts: dict[str, int] = {}
+    recovery_attempts = 0
+    recovery_successes = 0
     last_frame = None
 
     try:
-        for episode in range(args.episodes):
-            obs, reset_info = env.reset(seed=args.seed + episode)
+        seed_blocks = [args.seed]
+        if args.seed_blocks:
+            seed_blocks = [int(value.strip()) for value in args.seed_blocks.split(",") if value.strip()]
+        episode_seeds = [
+            (block_index, offset, base_seed + offset)
+            for block_index, base_seed in enumerate(seed_blocks)
+            for offset in range(args.episodes)
+        ]
+        for episode, (block_index, offset, episode_seed) in enumerate(episode_seeds):
+            if block_index > 0 and offset == 0 and hasattr(env, "terrain_episode_index"):
+                env.terrain_episode_index = 0
+            obs, reset_info = env.reset(seed=episode_seed)
             total_reward = 0.0
             steps = 0
             terminated = truncated = False
@@ -172,19 +230,46 @@ def main() -> int:
             initial_target_distance = float(reset_info.get("target_distance", float("nan")))
             initial_target_x = float(reset_info.get("target_x", float("nan")))
             initial_target_y = float(reset_info.get("target_y", float("nan")))
+            terrain_name = str(reset_info.get("terrain", args.terrain))
+            reset_pose = str(reset_info.get("reset_pose", "unknown"))
+            terrain_counts[terrain_name] = terrain_counts.get(terrain_name, 0) + 1
+            reset_pose_counts[reset_pose] = reset_pose_counts.get(reset_pose, 0) + 1
+            is_recovery_pose = reset_pose in {"tipped", "flipped"}
+            episode_policy = recovery_policy if is_recovery_pose and recovery_policy is not None else policy
+            terrain_policy_surfaces = {
+                value.strip() for value in args.terrain_checkpoint_surfaces.split(",") if value.strip()
+            }
+            if terrain_policy is not None and terrain_name in terrain_policy_surfaces:
+                episode_policy = terrain_policy
+            if is_recovery_pose:
+                recovery_attempts += 1
             base_x = base_y = 0.0
             if hasattr(env, "data"):
                 base_x = float(env.data.qpos[0])
                 base_y = float(env.data.qpos[1])
             initial_target_sector = target_sector(initial_target_x, initial_target_y, base_x, base_y)
+            previous_planar = np.asarray([base_x, base_y], dtype=np.float64)
+            planar_path_length = 0.0
             while not (terminated or truncated) and steps < args.max_steps:
                 if args.policy == "reference" and hasattr(env, "reference_action"):
                     action = env.reference_action()
                 elif policy is None:
                     action = env.action_space.sample()
                 else:
-                    action, _ = policy.predict(obs, deterministic=True)
+                    action, _ = episode_policy.predict(obs, deterministic=True)
+                    if not is_recovery_pose and blend_policy is not None and args.blend_weight != 0.0:
+                        blend_action, _ = blend_policy.predict(obs, deterministic=True)
+                        action = (1.0 - args.blend_weight) * action + args.blend_weight * blend_action
+                if args.action_multiplier != 1.0:
+                    action = np.clip(
+                        np.asarray(action) * args.action_multiplier,
+                        env.action_space.low,
+                        env.action_space.high,
+                    )
                 obs, reward, terminated, truncated, info = env.step(action)
+                current_planar = env.data.qpos[0:2].copy()
+                planar_path_length += float(np.linalg.norm(current_planar - previous_planar))
+                previous_planar = current_planar
                 total_reward += reward
                 steps += 1
                 if args.task == "target" and success_step is None and bool(info.get("success", False)):
@@ -200,10 +285,18 @@ def main() -> int:
             lengths.append(steps)
             success = bool(info.get("success", False))
             successes.append(success)
+            if success:
+                success_pose_counts[reset_pose] = success_pose_counts.get(reset_pose, 0) + 1
+                if is_recovery_pose:
+                    recovery_successes += 1
             if args.task == "target":
                 final_target_distance = float(info.get("target_distance", initial_target_distance))
                 if math.isfinite(initial_target_distance) and math.isfinite(final_target_distance):
-                    target_distance_reductions.append(initial_target_distance - final_target_distance)
+                    reduction = initial_target_distance - final_target_distance
+                    target_distance_reductions.append(reduction)
+                    path_efficiencies.append(
+                        max(0.0, min(1.0, reduction / max(planar_path_length, 1e-6)))
+                    )
                 if success and success_step is not None:
                     time_to_successes.append(float(success_step) * float(getattr(env, "control_dt", float("nan"))))
                 elif not success:
@@ -245,7 +338,12 @@ def main() -> int:
         print(f"success_rate={float(np.mean(successes)):.3f} successes={sum(successes)}/{len(successes)}")
         print(f"mean_time_to_success={mean_or_nan(time_to_successes):.3f}")
         print(f"target_distance_reduction={mean_or_nan(target_distance_reductions):.3f}")
+        print(f"mean_path_efficiency={mean_or_nan(path_efficiencies):.3f}")
+        print(f"recovery_success_rate={recovery_successes / max(1, recovery_attempts):.3f}")
         print(f"failure_sectors={format_sector_counts(failure_sectors)}")
+        print("terrain_counts=" + ",".join(f"{key}:{terrain_counts[key]}" for key in sorted(terrain_counts)))
+        print("reset_pose_counts=" + ",".join(f"{key}:{reset_pose_counts[key]}" for key in sorted(reset_pose_counts)))
+        print("success_pose_counts=" + ",".join(f"{key}:{success_pose_counts[key]}" for key in sorted(success_pose_counts)))
     print(
         f"terrain={args.terrain} terrain_seed={args.terrain_seed} "
         f"terrain_curriculum={args.terrain_curriculum}"

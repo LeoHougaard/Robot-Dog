@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import random
 import sys
 import time
 import tkinter as tk
@@ -53,6 +54,12 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--terrain", default=DEFAULT_TERRAIN, help="Terrain preset to request from supported envs.")
     parser.add_argument("--terrain-seed", type=int, help="Optional terrain generation seed for supported envs.")
+    parser.add_argument("--terrain-curriculum", help="Comma-separated terrain curriculum.")
+    parser.add_argument(
+        "--random-reset",
+        action="store_true",
+        help="Use a fresh random seed, start pose, target, and curriculum surface on every reset.",
+    )
     parser.add_argument("--target-velocity", type=float, help="Target-directed velocity for target task.")
     parser.add_argument("--episode-seconds", type=float, help="Override episode duration for supported envs.")
     parser.add_argument("--target-radius-min", type=float, help="Minimum random target radius for target task.")
@@ -66,6 +73,11 @@ def main() -> int:
         help="For target mode, sample a new random target immediately after success.",
     )
     args = parser.parse_args()
+    terrain_curriculum = (
+        tuple(value.strip() for value in args.terrain_curriculum.split(",") if value.strip())
+        if args.terrain_curriculum
+        else None
+    )
 
     try:
         from PIL import Image, ImageTk
@@ -92,6 +104,7 @@ def main() -> int:
                 "randomize_actuators": False,
                 "terrain": args.terrain,
                 "terrain_seed": args.terrain_seed,
+                "terrain_curriculum": terrain_curriculum,
                 "target_velocity": args.target_velocity,
                 "episode_seconds": args.episode_seconds,
                 "target_radius_min": args.target_radius_min,
@@ -111,6 +124,7 @@ def main() -> int:
         "obs": None,
         "last_info": {},
         "last_step_time": time.perf_counter(),
+        "last_tick_time": time.perf_counter(),
         "reset_count": 0,
         "checkpoint": None,
         "checkpoint_mtime": None,
@@ -125,6 +139,14 @@ def main() -> int:
     toolbar.pack(fill=tk.X)
     refresh_button = tk.Button(toolbar, text="Refresh policy")
     refresh_button.pack(side=tk.LEFT)
+    reset_button = tk.Button(toolbar, text="Reset")
+    reset_button.pack(side=tk.LEFT, padx=(6, 0))
+    run_indicator = tk.Canvas(toolbar, width=18, height=18, highlightthickness=0)
+    run_indicator.pack(side=tk.LEFT, padx=(10, 4))
+    run_indicator_dot = run_indicator.create_oval(3, 3, 15, 15, fill="#2fa84f", outline="#1d6f34", width=1)
+    run_indicator_text = tk.StringVar(value="Running")
+    run_indicator_label = tk.Label(toolbar, textvariable=run_indicator_text, anchor="w")
+    run_indicator_label.pack(side=tk.LEFT)
 
     image_label = tk.Label(root, bg="black")
     image_label.pack(fill=tk.BOTH, expand=True)
@@ -132,13 +154,22 @@ def main() -> int:
     status_label = tk.Label(root, textvariable=status, anchor="w")
     status_label.pack(fill=tk.X)
 
+    reset_rng = random.SystemRandom()
+
     def reset_env() -> None:
-        seed = args.seed + state["reset_count"]
+        if args.random_reset:
+            seed = reset_rng.randrange(0, 2**31)
+            if terrain_curriculum and hasattr(env, "terrain_episode_index"):
+                terrain_index = reset_rng.randrange(len(terrain_curriculum))
+                env.terrain_episode_index = terrain_index * 20 + reset_rng.randrange(20)
+        else:
+            seed = args.seed + state["reset_count"]
         state["reset_count"] += 1
-        state["obs"], _ = env.reset(seed=seed)
-        state["last_info"] = {}
+        state["obs"], reset_info = env.reset(seed=seed)
+        state["last_info"] = reset_info
 
     reset_env()
+    reset_button.configure(command=reset_env)
 
     def load_policy(reset_after_load: bool = False) -> None:
         nonlocal checkpoint, policy
@@ -221,11 +252,29 @@ def main() -> int:
             f"policy={state['policy']} paused={state['paused']}"
             f" checkpoint={short_path(state['checkpoint'])}"
             f" terrain={terrain_label(env, args.terrain)}"
+            f" start={info.get('reset_pose', 'unknown')}"
             f" z={info.get('base_height', float('nan')):.3f}"
             f" upright={info.get('upright', float('nan')):.3f}"
             f"{target_text}"
-            " | Refresh/F5 reloads latest, W/S/A/D move target, 1 learned, 2 reference, 3 random, R reset"
+            " | Reset/R randomizes start+terrain, Refresh/F5 reloads latest, W/S/A/D move target"
         )
+
+    def update_run_indicator() -> None:
+        tick_age = time.perf_counter() - float(state["last_tick_time"])
+        if state["paused"]:
+            fill = "#d89b28"
+            outline = "#8a6114"
+            label = "Paused"
+        elif tick_age > 1.0:
+            fill = "#c83e3e"
+            outline = "#842020"
+            label = "Stale"
+        else:
+            fill = "#2fa84f"
+            outline = "#1d6f34"
+            label = "Running"
+        run_indicator.itemconfigure(run_indicator_dot, fill=fill, outline=outline)
+        run_indicator_text.set(label)
 
     def tick() -> None:
         try:
@@ -234,6 +283,7 @@ def main() -> int:
                 obs, _reward, terminated, truncated, info = env.step(action)
                 state["obs"] = obs
                 state["last_info"] = info
+                state["last_step_time"] = time.perf_counter()
                 target_success = bool(info.get("success", False))
                 if (terminated and not target_success) or truncated or (args.auto_reset_success and target_success):
                     reset_env()
@@ -243,6 +293,8 @@ def main() -> int:
             photo = ImageTk.PhotoImage(image=image)
             image_label.configure(image=photo)
             image_label.image = photo
+            state["last_tick_time"] = time.perf_counter()
+            update_run_indicator()
             update_status()
             root.after(int(1000 * env.control_dt), tick)
         except tk.TclError:

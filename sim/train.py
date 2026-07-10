@@ -278,6 +278,8 @@ def train_ppo(args: argparse.Namespace) -> int:
             n_epochs=args.n_epochs,
             learning_rate=args.learning_rate,
             ent_coef=args.ent_coef,
+            clip_range=args.clip_range,
+            target_kl=args.target_kl,
             verbose=args.verbose,
             seed=args.seed,
             device=device,
@@ -292,6 +294,8 @@ def train_ppo(args: argparse.Namespace) -> int:
             gamma=0.98,
             learning_rate=args.learning_rate,
             ent_coef=args.ent_coef,
+            clip_range=args.clip_range,
+            target_kl=args.target_kl,
             verbose=args.verbose,
             seed=args.seed,
             device=device,
@@ -484,6 +488,8 @@ def main() -> int:
     parser.add_argument("--n-epochs", type=int, default=4, help="PPO epochs per update.")
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--ent-coef", type=float, default=0.002, help="PPO entropy coefficient.")
+    parser.add_argument("--clip-range", type=float, default=0.2, help="PPO policy clipping range.")
+    parser.add_argument("--target-kl", type=float, help="Optional PPO approximate-KL early-stop threshold.")
     parser.add_argument(
         "--checkpoint-freq",
         type=int,

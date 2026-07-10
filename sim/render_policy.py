@@ -58,7 +58,18 @@ def main() -> int:
     parser.add_argument("--success-radius", type=float, help="Success radius for target task.")
     parser.add_argument("--terrain", default=DEFAULT_TERRAIN, help="Terrain preset to request from supported envs.")
     parser.add_argument("--terrain-seed", type=int, help="Optional terrain generation seed for supported envs.")
+    parser.add_argument(
+        "--terrain-curriculum",
+        nargs="?",
+        const="flat,mild,rough,hard",
+        help="Comma-separated terrain curriculum for supported envs.",
+    )
     args = parser.parse_args()
+    terrain_curriculum = None
+    if args.terrain_curriculum:
+        terrain_curriculum = tuple(
+            value.strip() for value in args.terrain_curriculum.split(",") if value.strip()
+        )
 
     try:
         import numpy as np
@@ -87,6 +98,7 @@ def main() -> int:
                 "randomize_actuators": False,
                 "terrain": args.terrain,
                 "terrain_seed": args.terrain_seed,
+                "terrain_curriculum": terrain_curriculum,
                 "target_velocity": args.target_velocity,
                 "episode_seconds": args.episode_seconds,
                 "target_radius_min": args.target_radius_min,
@@ -98,7 +110,8 @@ def main() -> int:
     policy = load_policy(args.checkpoint) if args.policy == "ppo" else None
     terrain_text = terrain_label(env, args.terrain)
 
-    obs, _ = env.reset(seed=args.seed)
+    obs, reset_info = env.reset(seed=args.seed)
+    initial_target_distance = float(reset_info.get("target_distance", float("nan")))
     capture_steps = set(np.linspace(0, args.steps - 1, args.frames, dtype=int).tolist())
     images: list[Image.Image] = []
     total_reward = 0.0
@@ -158,13 +171,18 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(output)
     print(f"rendered={output}")
+    final_target_distance = float(info.get("target_distance", float("nan")))
+    target_distance_reduction = initial_target_distance - final_target_distance
+    status = "terminated" if terminated else "truncated" if truncated else "max_steps"
     print(
-        f"steps={step + 1} return={total_reward:.3f} "
+        f"steps={step + 1} return={total_reward:.3f} status={status} "
         f"forward_distance={info.get('forward_distance', float('nan')):.3f} "
-        f"target_distance={info.get('target_distance', float('nan')):.3f} "
+        f"initial_target_distance={initial_target_distance:.3f} "
+        f"target_distance={final_target_distance:.3f} "
+        f"target_distance_reduction={target_distance_reduction:.3f} "
         f"base_height={info.get('base_height', float('nan')):.3f} "
         f"upright={info.get('upright', float('nan')):.3f} "
-        f"terrain={terrain_text}"
+        f"success={info.get('success', False)} terrain={terrain_text}"
     )
     return 0
 

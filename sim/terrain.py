@@ -136,7 +136,9 @@ def curriculum_terrain_name(
         if len(levels) == 1:
             return levels[0]
         span = 20
-        index = min(len(levels) - 1, episode_index // span)
+        # Progress through every level once, then keep revisiting the complete
+        # mixture instead of training forever on only the final surface.
+        index = (episode_index // span) % len(levels)
         return levels[index]
     if isinstance(curriculum, bool):
         curriculum_value = "auto" if curriculum else ""

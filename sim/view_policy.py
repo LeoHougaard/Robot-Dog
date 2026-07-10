@@ -85,6 +85,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--terrain", default=DEFAULT_TERRAIN, help="Terrain preset to request from supported envs.")
     parser.add_argument("--terrain-seed", type=int, help="Optional terrain generation seed for supported envs.")
+    parser.add_argument("--terrain-curriculum", help="Comma-separated terrain curriculum.")
     parser.add_argument("--target-velocity", type=float, help="Target-directed velocity for target task.")
     parser.add_argument("--episode-seconds", type=float, help="Override episode duration for supported envs.")
     parser.add_argument("--target-radius-min", type=float, help="Minimum random target radius for target task.")
@@ -98,6 +99,11 @@ def main() -> int:
         help="For target mode, sample a new random target immediately after success.",
     )
     args = parser.parse_args()
+    terrain_curriculum = (
+        tuple(value.strip() for value in args.terrain_curriculum.split(",") if value.strip())
+        if args.terrain_curriculum
+        else None
+    )
 
     try:
         import mujoco.viewer
@@ -121,6 +127,7 @@ def main() -> int:
                 "randomize_actuators": False,
                 "terrain": args.terrain,
                 "terrain_seed": args.terrain_seed,
+                "terrain_curriculum": terrain_curriculum,
                 "target_velocity": args.target_velocity,
                 "episode_seconds": args.episode_seconds,
                 "target_radius_min": args.target_radius_min,

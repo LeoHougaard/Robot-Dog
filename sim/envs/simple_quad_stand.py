@@ -112,6 +112,12 @@ except ImportError:
     _BaseEnv = object
 
 
+def ensure_optional_deps_loaded() -> None:
+    global _gym, _spaces, _mujoco, _np
+    if _gym is None or _spaces is None or _mujoco is None or _np is None:
+        _gym, _spaces, _mujoco, _np = import_optional_deps()
+
+
 class SimpleQuadStandEnv(_BaseEnv):
     """MuJoCo standing task with normalized position-control actions."""
 
@@ -132,8 +138,7 @@ class SimpleQuadStandEnv(_BaseEnv):
         terrain_curriculum: str | tuple[str, ...] | bool | None = None,
         deterministic: bool = False,
     ) -> None:
-        if _gym is None or _spaces is None or _mujoco is None or _np is None:
-            import_optional_deps()
+        ensure_optional_deps_loaded()
         super().__init__()
 
         from sim.terrain import (
@@ -182,6 +187,7 @@ class SimpleQuadStandEnv(_BaseEnv):
         self.elapsed_steps = 0
         self.rng = _np.random.default_rng(seed)
         self.last_action = _np.zeros(len(ACTUATED_JOINTS), dtype=_np.float32)
+        self.wrap_joint_observations = False
         self.renderer = None
 
         self.joint_ids = [_mujoco.mj_name2id(self.model, _mujoco.mjtObj.mjOBJ_JOINT, name) for name in ACTUATED_JOINTS]
@@ -220,6 +226,10 @@ class SimpleQuadStandEnv(_BaseEnv):
         return str(value).strip().lower() not in {"", "none", "off", "false", "0"}
 
     def _select_terrain_name(self) -> str:
+        if self.deterministic_terrain and isinstance(self.terrain_curriculum, (tuple, list)):
+            levels = [str(value) for value in self.terrain_curriculum if str(value).strip()]
+            if levels:
+                return self._get_terrain_config(levels[self.terrain_episode_index % len(levels)]).name
         return self._curriculum_terrain_name(
             self.requested_terrain,
             self.terrain_curriculum,
@@ -262,9 +272,13 @@ class SimpleQuadStandEnv(_BaseEnv):
         self.terrain_level = self.terrain_config.name
 
     def _get_obs(self):
+        qpos = self.data.qpos.copy()
+        if self.wrap_joint_observations:
+            joint_angles = qpos[self.joint_qpos_addr]
+            qpos[self.joint_qpos_addr] = _np.arctan2(_np.sin(joint_angles), _np.cos(joint_angles))
         return _np.concatenate(
             [
-                self.data.qpos.copy(),
+                qpos,
                 self.data.qvel.copy(),
                 self.last_action.astype(_np.float64),
             ]
@@ -287,12 +301,20 @@ class SimpleQuadStandEnv(_BaseEnv):
             self.model.dof_frictionloss[self.joint_dof_addr] = self.base_joint_frictionloss
             self.episode_servo_velocity_limit[:] = self.servo_velocity_limit_rad_s
             return
-        torque_scale = self.rng.uniform(0.7, 1.0, size=self.model.nu)
+        warmup_episodes = float(getattr(self, "domain_randomization_warmup_episodes", 0.0))
+        curriculum_scale = 1.0
+        if warmup_episodes > 0.0:
+            curriculum_scale = max(0.0, min(1.0, self.terrain_episode_index / warmup_episodes))
+        torque_min = 1.0 - 0.30 * curriculum_scale
+        velocity_min = 1.0 - 0.25 * curriculum_scale
+        friction_min = 1.0 - 0.15 * curriculum_scale
+        friction_max = 1.0 + 0.20 * curriculum_scale
+        torque_scale = self.rng.uniform(torque_min, 1.0, size=self.model.nu)
         self.model.actuator_forcerange[:, 0] = self.base_forcerange[:, 0] * torque_scale
         self.model.actuator_forcerange[:, 1] = self.base_forcerange[:, 1] * torque_scale
-        velocity_scale = self.rng.uniform(0.75, 1.0, size=self.model.nu)
+        velocity_scale = self.rng.uniform(velocity_min, 1.0, size=self.model.nu)
         self.episode_servo_velocity_limit[:] = self.servo_velocity_limit_rad_s * velocity_scale
-        friction_scale = self.rng.uniform(0.85, 1.2, size=len(self.joint_dof_addr))
+        friction_scale = self.rng.uniform(friction_min, friction_max, size=len(self.joint_dof_addr))
         self.model.dof_frictionloss[self.joint_dof_addr] = self.base_joint_frictionloss * friction_scale
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
@@ -497,7 +519,12 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
         terrain_seed: int | None = None,
         terrain_curriculum: str | tuple[str, ...] | bool | None = None,
         deterministic: bool = False,
+        randomize_start_xy_m: float = 0.30,
+        recovery_start_probability: float = 0.15,
+        flipped_start_probability: float = 0.10,
+        continuous_joints: bool = True,
     ) -> None:
+        ensure_optional_deps_loaded()
         self.target_xy = _np.asarray([0.6, 0.0], dtype=_np.float64)
         self.initial_target_distance = 0.0
         self.previous_target_distance = 0.0
@@ -505,6 +532,11 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
         self.target_radius_min = target_radius_min
         self.target_radius_max = target_radius_max
         self.success_radius = success_radius
+        self.randomize_start_xy_m = max(0.0, float(randomize_start_xy_m))
+        self.recovery_start_probability = max(0.0, min(1.0, float(recovery_start_probability)))
+        self.flipped_start_probability = max(0.0, min(1.0, float(flipped_start_probability)))
+        self.continuous_joints = bool(continuous_joints)
+        self.domain_randomization_warmup_episodes = 300
         super().__init__(
             model_path=model_path,
             render_mode=render_mode,
@@ -520,6 +552,18 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
             terrain_curriculum=terrain_curriculum,
             deterministic=deterministic,
         )
+        if self.continuous_joints:
+            # The source URDF declares every leg joint continuous.  Remove the
+            # generated MJCF hard stops and expose a complete 2*pi target span.
+            self.model.jnt_limited[self.joint_ids] = 0
+            self.model.jnt_range[self.joint_ids, 0] = -math.pi
+            self.model.jnt_range[self.joint_ids, 1] = math.pi
+            self.model.actuator_ctrllimited[:] = 1
+            self.model.actuator_ctrlrange[:, 0] = -math.pi
+            self.model.actuator_ctrlrange[:, 1] = math.pi
+            self.ctrl_min = self.model.actuator_ctrlrange[:, 0].astype(_np.float32)
+            self.ctrl_max = self.model.actuator_ctrlrange[:, 1].astype(_np.float32)
+            self.wrap_joint_observations = True
         self.target_body_id = _mujoco.mj_name2id(self.model, _mujoco.mjtObj.mjOBJ_BODY, "target_marker")
         self.target_mocap_id = -1
         if self.target_body_id >= 0:
@@ -534,6 +578,15 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
     def _base_yaw(self) -> float:
         body_xmat = self.data.xmat[self.body_id].reshape(3, 3)
         return math.atan2(float(body_xmat[1, 0]), float(body_xmat[0, 0]))
+
+    def _action_to_ctrl(self, action):
+        action_arr = _np.clip(_np.asarray(action, dtype=_np.float32), -1.0, 1.0)
+        body_xmat = self.data.xmat[self.body_id].reshape(3, 3)
+        upright = float(body_xmat[2, 2])
+        recovery_range = bool(self.continuous_joints and upright < 0.35)
+        scale = math.pi if recovery_range else float(self.action_scale_rad)
+        target = self.neutral_ctrl + action_arr * scale
+        return _np.clip(target, self.ctrl_min, self.ctrl_max)
 
     def _target_delta_world(self) -> Any:
         return self.target_xy - self.data.qpos[0:2]
@@ -562,8 +615,73 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
         angle = float(self.rng.uniform(-math.pi, math.pi))
         return radius * math.cos(angle), radius * math.sin(angle)
 
+    @staticmethod
+    def _quat_from_euler(roll: float, pitch: float, yaw: float):
+        cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
+        cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
+        cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
+        return _np.asarray(
+            [
+                cr * cp * cy + sr * sp * sy,
+                sr * cp * cy - cr * sp * sy,
+                cr * sp * cy + sr * cp * sy,
+                cr * cp * sy - sr * sp * cy,
+            ],
+            dtype=_np.float64,
+        )
+
+    def _randomize_target_start(self, options: dict[str, Any]) -> str:
+        radius = self.randomize_start_xy_m * math.sqrt(float(self.rng.uniform(0.0, 1.0)))
+        angle = float(self.rng.uniform(-math.pi, math.pi))
+        if "start_xy" in options:
+            start_x, start_y = [float(value) for value in options["start_xy"]]
+        else:
+            start_x, start_y = radius * math.cos(angle), radius * math.sin(angle)
+
+        # Begin with random XY/yaw but mostly upright locomotion, then blend in
+        # side and flipped recovery over the first 160 episodes per worker.
+        recovery_factor = 1.0 if self.deterministic_terrain else 0.5
+        flip_probability = self.flipped_start_probability * recovery_factor
+        recovery_probability = self.recovery_start_probability * recovery_factor
+        pose_draw = float(self.rng.uniform(0.0, 1.0))
+        yaw = float(self.rng.uniform(-math.pi, math.pi))
+        if pose_draw < flip_probability:
+            pose_name = "flipped"
+            roll = math.copysign(float(self.rng.uniform(2.65, math.pi)), float(self.rng.uniform(-1.0, 1.0)))
+            pitch = float(self.rng.uniform(-0.35, 0.35))
+            base_z = 0.075
+            joint_angles = self.rng.uniform(-math.pi, math.pi, size=len(self.joint_qpos_addr))
+        elif pose_draw < flip_probability + recovery_probability:
+            pose_name = "tipped"
+            if float(self.rng.uniform()) < 0.5:
+                roll = math.copysign(float(self.rng.uniform(0.95, 1.65)), float(self.rng.uniform(-1.0, 1.0)))
+                pitch = float(self.rng.uniform(-0.30, 0.30))
+            else:
+                roll = float(self.rng.uniform(-0.30, 0.30))
+                pitch = math.copysign(float(self.rng.uniform(0.95, 1.55)), float(self.rng.uniform(-1.0, 1.0)))
+            base_z = 0.085
+            joint_angles = self.rng.uniform(-math.pi, math.pi, size=len(self.joint_qpos_addr))
+        else:
+            pose_name = "upright"
+            roll = float(self.rng.normal(0.0, 0.10))
+            pitch = float(self.rng.normal(0.0, 0.10))
+            base_z = float(self.target_base_height + self.terrain_config.amplitude_m)
+            joint_angles = self.rng.uniform(-0.22, 0.22, size=len(self.joint_qpos_addr))
+
+        self.data.qpos[0:3] = [start_x, start_y, base_z]
+        self.data.qpos[3:7] = self._quat_from_euler(roll, pitch, yaw)
+        self.data.qpos[self.joint_qpos_addr] = joint_angles
+        self.data.qvel[:] = 0.0
+        self.data.qvel[0:6] = self.rng.uniform(-0.08, 0.08, size=6)
+        self.current_ctrl[:] = _np.clip(joint_angles, self.ctrl_min, self.ctrl_max)
+        self.data.ctrl[:] = self.current_ctrl
+        _mujoco.mj_forward(self.model, self.data)
+        return pose_name
+
     def _select_target_primitive(self) -> tuple[float, float, float, float, float, float, float]:
-        dx, dy = [float(v) for v in self._target_delta_world()]
+        # Gait selection must be body-relative so random starting yaw does not
+        # rotate the desired direction out from under the policy.
+        dx, dy, _distance, _heading_error = self._target_local()
         distance = math.sqrt(dx * dx + dy * dy)
         if distance < 1e-6:
             return TARGET_GAIT_PRIMITIVES[6]
@@ -587,10 +705,21 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         obs, info = super().reset(seed=seed, options=options)
         options = options or {}
+        reset_pose = self._randomize_target_start(options)
         if "target_xy" in options:
             target_x, target_y = options["target_xy"]
         else:
-            target_x, target_y = self.sample_target()
+            if reset_pose != "upright":
+                recovery_progress = max(0.0, min(1.0, self.terrain_episode_index / 160.0))
+                min_radius = max(float(self.success_radius) * 1.05, 0.23)
+                max_radius = 0.32 + 1.20 * recovery_progress
+                radius = math.sqrt(float(self.rng.uniform(min_radius**2, max_radius**2)))
+                angle = float(self.rng.uniform(-math.pi, math.pi))
+                target_dx, target_dy = radius * math.cos(angle), radius * math.sin(angle)
+            else:
+                target_dx, target_dy = self.sample_target()
+            target_x = float(self.data.qpos[0]) + target_dx
+            target_y = float(self.data.qpos[1]) + target_dy
         self.set_target(target_x, target_y)
         self.previous_target_distance = self._target_local()[2]
         self.initial_target_distance = self.previous_target_distance
@@ -600,6 +729,10 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
         info["target_y"] = float(self.target_xy[1])
         info["target_distance"] = self.previous_target_distance
         info["initial_target_distance"] = self.initial_target_distance
+        info["reset_pose"] = reset_pose
+        info["start_x"] = float(self.data.qpos[0])
+        info["start_y"] = float(self.data.qpos[1])
+        info["continuous_joints"] = bool(self.continuous_joints)
         return self._get_obs(), info
 
     def _get_obs(self):
@@ -670,45 +803,36 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
         action_arr = _np.asarray(action, dtype=_np.float32)
         reference_error = action_arr - reference
 
-        stable_for_success = bool(
-            info["base_height"] > 0.08
-            and info["upright"] > math.cos(0.75)
-            and distance <= self.success_radius
-        )
-        velocity_clip = max(0.55, 2.0 * float(self.target_velocity))
-        clipped_directed_velocity = max(-0.35, min(velocity_clip, directed_velocity))
+        # Target success is deliberately planar-only. Height and uprightness
+        # remain diagnostics, never reward inputs or success gates.
+        success = bool(distance <= self.success_radius)
         velocity_error = directed_velocity - float(self.target_velocity)
-        velocity_tracking = math.exp(-8.0 * velocity_error * velocity_error)
-        time_pressure = self.elapsed_steps / max(1, self.max_steps)
-        reward = (
-            0.25
-            + 9.0 * progress
-            + 0.55 * clipped_directed_velocity
-            + 0.35 * velocity_tracking
-            + 0.25 * max(0.0, target_distance_reduction)
-            - 0.95 * distance
-            - 0.22 * abs(heading_error)
-            - 0.035 * time_pressure
-            - 0.06 * lateral_speed
-            + 0.3 * max(0.0, info["upright"])
-            + 0.25 * float(_np.exp(-1.5 * _np.dot(reference_error, reference_error) / len(ACTUATED_JOINTS)))
-            - 0.015 * float(_np.dot(self.data.qvel[self.joint_dof_addr], self.data.qvel[self.joint_dof_addr]))
-            - 0.01 * float(_np.dot(action_arr, action_arr))
-        )
-        if directed_velocity < -0.01:
-            reward -= 0.12 * min(0.35, -directed_velocity)
-        success = stable_for_success
+        normalized_reduction = target_distance_reduction / max(self.initial_target_distance, 1e-6)
+        previous_near_target = math.exp(-5.0 * previous_distance)
+        near_target = math.exp(-5.0 * distance)
+        near_target_progress = near_target - previous_near_target
+
+        # A potential-difference reward cannot be collected by standing still
+        # or circling. Every dense term is derived only from XY target distance.
+        reward = 60.0 * progress + 12.0 * near_target_progress
+        if progress < 0.0:
+            reward += 30.0 * progress
         if success:
-            reward += 10.0 + max(0.0, self.max_steps - self.elapsed_steps) * 0.025
+            reward += 120.0 + max(0.0, self.max_steps - self.elapsed_steps) * 0.10
             terminated = True
-        if terminated and not success:
-            reward -= 2.0
+        else:
+            # Permit self-righting. Only invalid/escaped simulations terminate;
+            # low height and upside-down posture do not.
+            finite_state = bool(_np.all(_np.isfinite(self.data.qpos)) and _np.all(_np.isfinite(self.data.qvel)))
+            escaped = bool(abs(float(self.data.qpos[0])) > 4.0 or abs(float(self.data.qpos[1])) > 4.0)
+            terminated = bool(not finite_state or escaped or float(self.data.qpos[2]) < -0.25)
 
         info["target_x"] = float(self.target_xy[0])
         info["target_y"] = float(self.target_xy[1])
         info["target_distance"] = float(distance)
         info["initial_target_distance"] = float(self.initial_target_distance)
         info["target_distance_reduction"] = float(target_distance_reduction)
+        info["target_normalized_reduction"] = float(normalized_reduction)
         info["closest_target_distance"] = float(self.closest_target_distance)
         info["target_local_x"] = float(local_x)
         info["target_local_y"] = float(local_y)
@@ -719,9 +843,14 @@ class SimpleQuadTargetEnv(SimpleQuadWalkEnv):
         info["target_velocity_error"] = float(velocity_error)
         info["planar_speed"] = planar_speed
         info["lateral_speed"] = float(lateral_speed)
-        info["stable_for_success"] = bool(stable_for_success)
+        info["stable_for_success"] = bool(success)
         info["success"] = bool(success)
         info["stand_reward"] = float(stand_reward)
         info["reference_error"] = float(_np.sqrt(_np.mean(_np.square(reference_error))))
+        info["target_reward_planar_only"] = True
+        info["target_reward_near_target"] = float(near_target)
+        info["target_reward_planar_progress"] = float(60.0 * progress)
+        info["target_reward_planar_potential_progress"] = float(12.0 * near_target_progress)
+        info["target_reward_crash_penalty"] = 0.0
         self.previous_target_distance = distance
         return self._get_obs(), float(reward), terminated, truncated, info
